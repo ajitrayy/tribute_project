@@ -1,0 +1,9 @@
+{
+  "name": "Placeholder layout (NOT the IBN7 Bharat design)",
+  "placeholder": true,
+  "width": 1080,
+  "height": 1080,
+  "scale": 1,
+  "requiresLogo": true,
+  "html": "template.html"
+}
