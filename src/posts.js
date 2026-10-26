@@ -58,7 +58,7 @@ export function insertPost(p) {
 
 const UPDATABLE = new Set([
   'status', 'status_reason', 'source_image_path', 'image_hash', 'duplicate_of', 'image_url',
-  'extraction', 'fields', 'fact_check', 'approved_at', 'approved_by',
+  'extraction', 'fields', 'fact_check', 'approved_at', 'approved_by', 'photo_origin',
 ]);
 
 export function updatePost(id, patch) {

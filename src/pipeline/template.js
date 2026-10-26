@@ -16,6 +16,42 @@ export function dataUri(file) {
   return `data:${mimeFor(file)};base64,${fs.readFileSync(file).toString('base64')}`;
 }
 
+export const ALL_FIELDS = ['category_label', 'headline', 'subheadline', 'body_lines', 'location', 'date_text'];
+
+// Headline colour markup: [r]…[/r] red, [b]…[/b] blue, everything else the
+// template's default colour. Kept deliberately tiny so editors can type it.
+const MARKUP_TAG = /\[(\/?)(r|b)\]/g;
+
+export function stripMarkup(s) {
+  return String(s ?? '').replace(MARKUP_TAG, '');
+}
+
+// Newlines become line breaks so editors can match the reference line breaks.
+const escapeHtml = (s) => Mustache.escape(String(s)).replace(/\n/g, '<br>');
+
+export function markupToHtml(s) {
+  let out = '';
+  let open = null;
+  let last = 0;
+  const text = String(s ?? '');
+  for (const m of text.matchAll(MARKUP_TAG)) {
+    out += escapeHtml(text.slice(last, m.index));
+    last = m.index + m[0].length;
+    const [, closing, color] = m;
+    if (!closing && !open) {
+      out += `<span class="${color}">`;
+      open = color;
+    } else if (closing && open === color) {
+      out += '</span>';
+      open = null;
+    }
+    // Unbalanced or nested tags are dropped rather than rendered.
+  }
+  out += escapeHtml(text.slice(last));
+  if (open) out += '</span>';
+  return out;
+}
+
 export function listTemplates() {
   if (!fs.existsSync(config.templatesDir)) return [];
   return fs
@@ -23,7 +59,7 @@ export function listTemplates() {
     .filter((d) => d.isDirectory() && fs.existsSync(path.join(config.templatesDir, d.name, 'template.json')))
     .map((d) => {
       const t = loadTemplate(d.name);
-      return { id: t.id, name: t.name, placeholder: t.placeholder, width: t.width, height: t.height, references: t.references };
+      return { id: t.id, name: t.name, placeholder: t.placeholder, width: t.width, height: t.height, references: t.references, fields: t.fields, fieldLabels: t.fieldLabels };
     });
 }
 
@@ -48,6 +84,10 @@ export function loadTemplate(id) {
     scale: meta.scale || 1,
     requiresLogo: meta.requiresLogo !== false,
     limits: meta.limits || {},
+    // Fields this layout actually prints; the editor hides the rest and the
+    // fact check only counts text that ends up on the poster.
+    fields: Array.isArray(meta.fields) ? meta.fields.filter((f) => ALL_FIELDS.includes(f)) : ALL_FIELDS,
+    fieldLabels: meta.fieldLabels || {},
     html: fs.readFileSync(path.join(dir, meta.html || 'template.html'), 'utf8'),
     references,
   };
@@ -69,6 +109,8 @@ export function buildHtml(template, fields, { logoPath, photoPath } = {}) {
   const body = (fields.body_lines || []).filter((l) => String(l).trim());
   const view = {
     ...fields,
+    headline: stripMarkup(fields.headline),
+    headline_html: markupToHtml(fields.headline),
     body_lines: body,
     has_body: body.length > 0,
     logo_src: logoPath ? dataUri(logoPath) : '',

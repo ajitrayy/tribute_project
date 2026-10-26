@@ -14,7 +14,7 @@ import { log } from './logger.js';
 import { STATUSES, getPost, insertPost, latestRender, listPosts, rendersFor, updatePost } from './posts.js';
 import { EMPTY_FIELDS } from './pipeline/extract.js';
 import { factCheck } from './pipeline/facts.js';
-import { absMedia, saveSourceImage } from './pipeline/process.js';
+import { absMedia, cropPhotoFromSource, photoPathFor, removePhoto, savePhoto, saveSourceImage } from './pipeline/process.js';
 import { listTemplates, loadTemplate } from './pipeline/template.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.maxImageBytes } });
@@ -64,7 +64,13 @@ function sanitizeFields(input) {
 function postDetail(id) {
   const post = getPost(id);
   if (!post) throw new HttpError(404, 'Post not found');
-  return { ...post, renders: rendersFor(id), jobs: jobsForPost(id) };
+  const photo = photoPathFor(post.id);
+  return {
+    ...post,
+    photo_url: photo ? `/media/${path.relative(config.mediaDir, photo)}?v=${fs.statSync(photo).mtimeMs}` : null,
+    renders: rendersFor(id),
+    jobs: jobsForPost(id),
+  };
 }
 
 export function createApp({ graph = new GraphClient() } = {}) {
@@ -98,6 +104,11 @@ export function createApp({ graph = new GraphClient() } = {}) {
       },
       queue: queueStats(),
       counts: getDb().prepare('SELECT status, COUNT(*) AS n FROM posts GROUP BY status').all(),
+      // Monitoring is only "verified" for a Page after a real post detected on it
+      // was processed into a poster. Nothing else counts.
+      verification: getDb()
+        .prepare("SELECT COUNT(*) AS pages, SUM(verified_at IS NOT NULL) AS verified, SUM(access_status = 'ok') AS readable FROM pages WHERE enabled = 1")
+        .get(),
       statuses: STATUSES,
       facebook: {
         graph_version: fb.graphVersion,
@@ -271,21 +282,34 @@ export function createApp({ graph = new GraphClient() } = {}) {
     if (!req.file) throw new HttpError(400, 'No photo uploaded.');
     const meta = await sharp(req.file.buffer).metadata().catch(() => null);
     if (!meta || !['jpeg', 'png', 'webp'].includes(meta.format)) throw new HttpError(400, 'Photo must be JPEG, PNG or WebP.');
-    const dir = path.join(config.mediaDir, 'photos');
-    fs.mkdirSync(dir, { recursive: true });
-    for (const f of fs.readdirSync(dir).filter((n) => n.startsWith(`${post.id}.`))) fs.unlinkSync(path.join(dir, f));
-    fs.writeFileSync(path.join(dir, `${post.id}.${meta.format === 'jpeg' ? 'jpg' : meta.format}`), req.file.buffer);
+    savePhoto(post.id, req.file.buffer, meta.format);
     updatePost(post.id, { status: 'queued', status_reason: 'Re-rendering with new photo' });
     enqueue('render', post.id);
     res.json(postDetail(post.id));
   }));
 
+  // Use a rectangle of the source poster (normalized 0-1 coordinates) as the photo.
+  app.post('/api/posts/:id/photo-crop', wrap(async (req, res) => {
+    const post = getPost(req.params.id);
+    if (!post) throw new HttpError(404, 'Post not found');
+    const b = req.body || {};
+    const box = Object.fromEntries(['x', 'y', 'width', 'height'].map((k) => [k, Number(b[k])]));
+    const ok = Object.values(box).every((v) => Number.isFinite(v) && v >= 0 && v <= 1) && box.width >= 0.05 && box.height >= 0.05
+      && box.x + box.width <= 1.0001 && box.y + box.height <= 1.0001;
+    if (!ok) throw new HttpError(400, 'Select a larger area inside the source image.');
+    await cropPhotoFromSource(post.id, box, 'crop');
+    updatePost(post.id, { status: 'queued', status_reason: 'Re-rendering with cropped photo' });
+    enqueue('render', post.id);
+    res.json(postDetail(post.id));
+  }));
+
   app.delete('/api/posts/:id/photo', (req, res) => {
-    const dir = path.join(config.mediaDir, 'photos');
-    if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir).filter((n) => n.startsWith(`${req.params.id}.`))) fs.unlinkSync(path.join(dir, f));
-    updatePost(Number(req.params.id), { status: 'queued', status_reason: 'Re-rendering without photo' });
-    enqueue('render', Number(req.params.id));
-    res.json(postDetail(req.params.id));
+    const post = getPost(req.params.id);
+    if (!post) throw new HttpError(404, 'Post not found');
+    removePhoto(post.id);
+    updatePost(post.id, { status: 'queued', status_reason: 'Re-rendering without photo' });
+    enqueue('render', post.id);
+    res.json(postDetail(post.id));
   });
 
   // ---- manual import (supported fallback for Pages the API cannot read) ----

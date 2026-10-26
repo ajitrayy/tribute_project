@@ -1,24 +1,47 @@
-# Installing the official IBN7 Bharat template
+# The IBN7 Bharat template
 
-The app ships only `templates/placeholder/`: a neutral grey layout that does **not**
-attempt the IBN7 Bharat look. Everything rendered with it is stamped
-**DRAFT - NOT FOR PUBLICATION** and cannot be approved. The official template must be
-built from the reference posters and logo you supply, and it is the only source of
-truth for logo placement, colours, typography, headline hierarchy, footer, margins and
-dimensions.
+`templates/ibn7bharat/` is built from the official reference posters supplied by
+IBN7 Bharat and is the default template. `templates/placeholder/` is a neutral grey
+fallback whose output is always a DRAFT.
 
-## What is needed from you
+## Where to put brand assets
 
-1. **Reference posters**: 3–5 real IBN7 Bharat posters, ideally at full resolution and
-   covering the variants you use (breaking strap, with photo, without photo, long and
-   short headlines).
-2. **The official logo**: SVG or a transparent PNG at least twice the size it appears on
-   the poster.
-3. **The fonts** used on the posters, as font files you are licensed to embed, or their
-   names if they are Google/Noto fonts.
-4. Any written brand rules (exact colour codes, minimum logo clear space, etc.).
+| Asset | Where |
+|---|---|
+| **Official logo** (SVG, or transparent PNG ≥ 300 px tall) | Dashboard → **Branding & template** → *Official logo* → Upload. Stored byte-for-byte in `DATA_DIR/assets/`. Drawn 56 px tall at natural width, centred between the red rules. Until a logo is uploaded, every poster is a DRAFT and cannot be approved. |
+| **Reference posters** | `templates/ibn7bharat/reference/` in the repository. They appear on the Branding tab for side-by-side checks. |
+| **Brand font files** (if IBN7 uses a licensed font) | `templates/ibn7bharat/fonts/`, then point the `@font-face` rules in `template.html` at them. |
+| **Footer artwork** (social icons + "// IBN7BHARAT") | `templates/ibn7bharat/assets/footer-social.png`. Currently cut 1:1 from the reference. Replace with a vector/2× export if you have one. |
 
-## How a template is built
+After changing anything under `templates/`, restart the app and press **Re-render all**
+on the Posters tab.
+
+## How the IBN7 Bharat layout works
+
+Measured from `reference/01-bihar-weather.jpg` (1080×1350):
+
+* Logo at y 49–105, centred, with 2 px red rules either side at y 79.
+* Headline centred, about 3 lines on a ~138 px pitch, in a heavy condensed face. Each
+  word is black unless marked:
+  * `[r]words[/r]` → red (#e0141b)
+  * `[b]words[/b]` → blue (#0130a4)
+  * a new line in the headline field forces a line break.
+
+  In the editor, select words and press **Red** / **Blue** / **Black**. Automatic
+  extraction suggests colours, and the app checks that the words themselves were not
+  changed.
+* *Sub-headline* prints as the white-on-red box used for quote attributions
+  (`- शत्रुजीत कपूर, DG (ITBP)`). *Body lines* print as smaller black lines.
+* The photo fills the space down to the footer and fades to white at its top. It comes
+  from (a) the area automatic extraction picks on the source poster, (b) an area the
+  editor drags on the source image, or (c) an uploaded photo.
+* Footer: white band with social icons and handle, 16 px red bar.
+* Long headlines shrink automatically. If one still does not fit, the editor is told to
+  shorten it.
+* Label/strap, location and date are not printed by this layout. If the source has them,
+  the fact check says so, so they can be moved into the headline or body.
+
+## Building or changing a template
 
 ```
 templates/ibn7bharat/
@@ -46,13 +69,16 @@ templates/ibn7bharat/
   2160×2700 PNG with the same layout). Use the reference posters' exact pixel size.
 * `placeholder: false` marks this as the approved template. Only set it once the layout
   matches the references.
+* `fields` lists which fields the layout prints. The editor hides the others, and
+  `fieldLabels` renames them.
 
 `template.html` is a full HTML page sized to `width × height`. Available values:
 
 | Placeholder | Content |
 |---|---|
 | `{{category_label}}` | strap such as ब्रेकिंग न्यूज़ (may be empty) |
-| `{{headline}}` | main headline |
+| `{{headline}}` | main headline, colour markup removed |
+| `{{{headline_html}}}` | headline with `[r]`/`[b]` turned into `<span class="r">`/`<span class="b">` and newlines into `<br>` (escaped) |
 | `{{subheadline}}` | secondary line (may be empty) |
 | `{{#body_lines}}…{{.}}…{{/body_lines}}` | additional lines; `{{#has_body}}` is true if any |
 | `{{location}}`, `{{date_text}}` | only if printed on the source poster |

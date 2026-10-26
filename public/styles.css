@@ -71,3 +71,16 @@ pre { white-space: pre-wrap; font-family: "Noto Sans Devanagari", ui-monospace, 
 .refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
 .refs img { width: 100%; border: 1px solid var(--line); border-radius: 6px; }
 code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+
+.crop-host { position: relative; user-select: none; touch-action: none; }
+.crop-host img { cursor: crosshair; }
+.crop-box { position: absolute; border: 2px solid #1f4fd1; background: rgba(31,79,209,.15); pointer-events: none; }
+.colorbar { flex-wrap: wrap; gap: 6px; }
+.swatch[data-color=r] { color: #e0141b; font-weight: 700; }
+.swatch[data-color=b] { color: #0130a4; font-weight: 700; }
+.swatch[data-color=""] { color: #000; font-weight: 700; }
+.headline-preview { font-family: "Noto Sans Devanagari", sans-serif; font-weight: 800; font-size: 20px; line-height: 1.35; text-align: center; padding: 8px; background: #fff; border: 1px dashed var(--line); border-radius: 6px; }
+.headline-preview .r { color: #e0141b; } .headline-preview .b { color: #0130a4; }
+.photo-thumb { width: 160px; height: 100px; background: #eee; border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.field { display: flex; flex-direction: column; gap: 4px; }

@@ -4,6 +4,26 @@ const fmt = (t) => (t ? new Date(t).toLocaleString() : '–');
 
 let status = null;
 let currentPost = null;
+let cropSel = null; // normalized {x,y,width,height} drawn on the source image
+
+const activeTemplate = () => status?.templates.find((t) => t.id === status.active_template);
+
+function markupHtml(text) {
+  // Mirrors src/pipeline/template.js markupToHtml for the live preview.
+  let out = '';
+  let open = null;
+  let last = 0;
+  const t = String(text || '');
+  for (const m of t.matchAll(/\[(\/?)(r|b)\]/g)) {
+    out += esc(t.slice(last, m.index));
+    last = m.index + m[0].length;
+    if (!m[1] && !open) { out += `<span class="${m[2]}">`; open = m[2]; } else if (m[1] && open === m[2]) { out += '</span>'; open = null; }
+  }
+  out += esc(t.slice(last));
+  if (open) out += '</span>';
+  return out.replace(/\n/g, '<br>');
+}
+const stripMarkup = (t) => String(t || '').replace(/\[\/?(r|b)\]/g, '');
 
 async function api(path, opts = {}) {
   const init = { ...opts, headers: { ...(opts.headers || {}) } };
@@ -51,6 +71,19 @@ async function loadStatus() {
   $('#mon-text').textContent = `${m.paused ? 'Paused' : 'Monitoring'} · last check ${fmt(m.last_poll_at)}${m.poll_requested ? ' · check requested' : ''}`;
   if (document.activeElement !== $('#mon-interval')) $('#mon-interval').value = m.interval_minutes;
   $('#mon-toggle').textContent = m.paused ? 'Resume' : 'Pause';
+  const v = status.verification || {};
+  const chip = $('#mon-verified');
+  if (!v.pages) {
+    chip.textContent = 'No Facebook Pages added';
+    chip.className = 'pill skipped';
+  } else if (v.verified) {
+    chip.textContent = `Facebook monitoring verified on ${v.verified}/${v.pages} Page(s)`;
+    chip.className = 'pill ok';
+  } else {
+    chip.textContent = `Facebook monitoring UNVERIFIED (${v.readable || 0}/${v.pages} Page(s) readable, no real post processed yet)`;
+    chip.className = 'pill needs_input';
+  }
+  chip.title = 'A Page is verified only after a real post detected on it has been processed into a poster.';
   const t = status.templates.find((x) => x.id === status.active_template);
   const warnings = [];
   if (!t || t.placeholder) warnings.push('The official IBN7 Bharat template is not installed yet - posters are rendered as DRAFTS on a placeholder layout and cannot be approved.');
@@ -151,7 +184,26 @@ function renderDetail() {
     ? `<ul class="warn-list">${[...reason, ...warnings].map((w) => `<li class="${esc(w.level)}">${esc(w.message)}</li>`).join('')}</ul>`
     : '<p class="muted">Fact check: no differences from the source transcription.</p>';
 
-  $('#d-source').innerHTML = p.source_image_path ? `<img src="/media/${esc(p.source_image_path)}" alt="Source poster">` : '<p class="muted">No source image stored.</p>';
+  if ($('#d-source').dataset.src !== (p.source_image_path || '')) {
+    $('#d-source').dataset.src = p.source_image_path || '';
+    $('#d-source').innerHTML = p.source_image_path ? `<img src="/media/${esc(p.source_image_path)}" alt="Source poster" draggable="false"><div class="crop-box" hidden></div>` : '<p class="muted">No source image stored.</p>';
+    cropSel = null;
+    $('#d-crop').disabled = true;
+    $('#d-crop-info').textContent = '';
+  }
+  $('#d-photo-preview').innerHTML = p.photo_url ? `<img src="${esc(p.photo_url)}" alt="">` : 'no photo';
+  $('#d-photo-origin').textContent = { auto: 'cut automatically from the source poster', crop: 'cropped from the source poster', upload: 'uploaded by an editor' }[p.photo_origin] || '';
+  const t = activeTemplate();
+  const used = t?.fields || ['category_label', 'headline', 'subheadline', 'body_lines', 'location', 'date_text'];
+  document.querySelectorAll('#d-form [data-field]').forEach((el) => {
+    const k = el.dataset.field;
+    el.hidden = !used.includes(k);
+    if (t?.fieldLabels?.[k]) el.querySelector('span').textContent = t.fieldLabels[k];
+  });
+  const unusedWithText = Object.entries(p.fields || {}).filter(([k, v]) => !used.includes(k) && (Array.isArray(v) ? v.length : v));
+  $('#d-unused').textContent = unusedWithText.length
+    ? `Not printed by this template: ${unusedWithText.map(([k, v]) => `${k} = "${Array.isArray(v) ? v.join(' / ') : v}"`).join('; ')}`
+    : '';
   $('#d-source-meta').innerHTML = [
     p.page_name ? esc(p.page_name) : p.source === 'manual' ? 'Manual import' : '',
     `posted ${fmt(p.posted_at)}`,
@@ -172,10 +224,75 @@ function renderDetail() {
   if (!form.contains(document.activeElement)) {
     for (const k of ['category_label', 'headline', 'subheadline', 'location', 'date_text']) form.elements[k].value = f[k] || '';
     form.elements.body_lines.value = (f.body_lines || []).join('\n');
+    $('#d-headline-preview').innerHTML = markupHtml(form.elements.headline.value);
   }
 }
 
 $('#d-close').addEventListener('click', () => $('#detail').close());
+
+// Headline colour markup: wrap the selection in [r]/[b], or strip tags for black.
+document.querySelectorAll('.swatch').forEach((btn) => btn.addEventListener('click', () => {
+  const ta = $('#d-form').elements.headline;
+  const { selectionStart: a, selectionEnd: b, value } = ta;
+  if (a === b) return;
+  const sel = stripMarkup(value.slice(a, b));
+  const c = btn.dataset.color;
+  const wrapped = c ? `[${c}]${sel}[/${c}]` : sel;
+  ta.value = value.slice(0, a) + wrapped + value.slice(b);
+  ta.focus();
+  ta.setSelectionRange(a, a + wrapped.length);
+  $('#d-headline-preview').innerHTML = markupHtml(ta.value);
+}));
+$('#d-form').elements.headline.addEventListener('input', (e) => {
+  $('#d-headline-preview').innerHTML = markupHtml(e.target.value);
+});
+
+// Drag a rectangle on the source image to choose the poster photo.
+(() => {
+  const host = $('#d-source');
+  let start = null;
+  const pos = (e) => {
+    const img = host.querySelector('img');
+    const r = img.getBoundingClientRect();
+    return { img, r, x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+  };
+  const draw = () => {
+    const box = host.querySelector('.crop-box');
+    const img = host.querySelector('img');
+    if (!box || !img || !cropSel) return;
+    const hr = host.getBoundingClientRect();
+    const r = img.getBoundingClientRect();
+    Object.assign(box.style, {
+      left: `${r.left - hr.left + cropSel.x * r.width}px`, top: `${r.top - hr.top + cropSel.y * r.height}px`,
+      width: `${cropSel.width * r.width}px`, height: `${cropSel.height * r.height}px`,
+    });
+    box.hidden = false;
+  };
+  host.addEventListener('pointerdown', (e) => {
+    if (e.target.tagName !== 'IMG') return;
+    start = pos(e);
+    host.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  host.addEventListener('pointermove', (e) => {
+    if (!start) return;
+    const p = pos(e);
+    cropSel = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), width: Math.abs(p.x - start.x), height: Math.abs(p.y - start.y) };
+    draw();
+  });
+  host.addEventListener('pointerup', () => {
+    if (!start) return;
+    start = null;
+    const ok = cropSel && cropSel.width > 0.05 && cropSel.height > 0.05;
+    $('#d-crop').disabled = !ok;
+    $('#d-crop-info').textContent = ok ? `${Math.round(cropSel.width * 100)}% × ${Math.round(cropSel.height * 100)}% of the source selected` : '';
+  });
+})();
+$('#d-crop').addEventListener('click', () => guarded(async () => {
+  currentPost = await api(`/api/posts/${currentPost.id}/photo-crop`, { json: cropSel });
+  $('#d-crop').disabled = true;
+  renderDetail();
+}));
 $('#detail').addEventListener('close', () => {
   currentPost = null;
   loadPosters();
@@ -226,12 +343,17 @@ async function loadPages() {
   $('#fb-config').innerHTML = `<strong>Facebook credentials on the server:</strong>
     app id/secret ${fb.has_app ? '✔' : '✘'} · user/system-user token ${fb.has_user_token ? '✔' : '✘'} ·
     explicit Page tokens: ${fb.page_token_count ?? 0} · Page Public Content Access: ${fb.ppca_enabled ? 'enabled' : 'not enabled'} · Graph ${esc(fb.graph_version || '')}`;
-  $('#pages-table').innerHTML = `<tr><th>Page</th><th>Access</th><th>Last checked</th><th>Posters</th><th>Enabled</th><th></th></tr>${pages.map((p) => `<tr>
+  $('#pages-table').innerHTML = `<tr><th>Page</th><th>Access</th><th>Monitoring verified</th><th>Last checked</th><th>Posters</th><th>Enabled</th><th></th></tr>${pages.map((p) => `<tr>
       <td><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name || p.identifier)}</a><br><span class="muted">${esc(p.fb_page_id || '')}</span></td>
       <td><span class="pill ${esc(p.access_status)}">${esc(p.access_status.replace('_', ' '))}</span> <span class="muted">${esc(p.access_method || '')}</span>${p.last_error ? `<br><span class="muted">${esc(p.last_error)}</span>` : ''}</td>
+      <td>${p.verified_at ? `<span class="pill ok">verified</span><br><span class="muted">${fmt(p.verified_at)} · <a href="#" data-open="${p.verified_post_id}">post #${p.verified_post_id}</a></span>` : '<span class="pill needs_input">not yet</span><br><span class="muted">waiting for a real new post</span>'}</td>
       <td>${fmt(p.last_polled_at)}</td><td>${p.poster_count}</td>
       <td><input type="checkbox" data-enable="${p.id}" ${p.enabled ? 'checked' : ''}></td>
       <td class="row"><button class="secondary" data-check="${p.id}">Re-check access</button><button class="secondary" data-del="${p.id}">Remove</button></td></tr>`).join('')}`;
+  document.querySelectorAll('#pages-table [data-open]').forEach((a) => a.addEventListener('click', (e) => {
+    e.preventDefault();
+    openPost(a.dataset.open);
+  }));
   document.querySelectorAll('[data-enable]').forEach((el) => el.addEventListener('change', () => guarded(async () => {
     await api(`/api/pages/${el.dataset.enable}`, { method: 'PATCH', json: { enabled: el.checked } });
   })));

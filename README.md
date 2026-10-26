@@ -8,14 +8,15 @@ author : ajit baabaaaji
 
 ## Current status
 
+See **[docs/STATUS.md](docs/STATUS.md)** for the full list of what has and has not been tested.
+
 | Part | State |
 |---|---|
-| Dashboard, history, edit / regenerate / approve / download | Working, covered by tests |
-| Job queue: retries, backoff, crash recovery, duplicate detection | Working, covered by tests |
-| Hindi rendering (Chromium + embedded Noto Sans Devanagari), undistorted logo | Working, covered by tests |
-| Facebook monitoring (Graph API) | Implemented and tested against a **simulated** Graph API only. **Not yet verified against a real Page.** No Page URLs or credentials have been supplied, and the build environment could not reach Facebook. Run `npm run fb:check` once credentials are set. |
-| Automatic text extraction (Claude vision) | Implemented. Not exercised in tests (no API key in the build environment). Without a key the app falls back to manual text entry. |
-| IBN7 Bharat template | **Not installed.** Only a neutral placeholder layout ships. Its output is stamped DRAFT and cannot be approved until the official template is built from your reference posters (docs/TEMPLATE.md). |
+| Manual import → edit → IBN7 Bharat PNG → approve → download | **Verified** end to end in the browser |
+| IBN7 Bharat template (`templates/ibn7bharat`, 1080×1350) | **Built from the supplied reference posters** and compared side by side. The headline font is an open-source stand-in until the brand font is supplied. |
+| Dashboard, history, retries, duplicate detection, fact check | Verified (tests + browser) |
+| **Automatic Facebook monitoring** | Implemented, **NOT verified**. No credentials or Page URL yet, and Facebook was unreachable from the build environment. The dashboard shows *UNVERIFIED* until a real new post is detected and processed. |
+| Automatic text + photo extraction (Claude vision) | Implemented, **not yet run**: no API key yet (`npm run extract:check`) |
 
 Read **[docs/FACEBOOK_ACCESS.md](docs/FACEBOOK_ACCESS.md)** first. It explains which
 Pages the Graph API can read (Pages you manage, or Pages that grant your business
@@ -62,8 +63,9 @@ npm start                         # dashboard on http://localhost:3000, worker i
 npm test
 ```
 
-Deployment: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**. Building the official
-template: **[docs/TEMPLATE.md](docs/TEMPLATE.md)**.
+Deployment: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**. API keys:
+**[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**. Logo, references and the template:
+**[docs/TEMPLATE.md](docs/TEMPLATE.md)**.
 
 ## Layout
 
@@ -76,7 +78,9 @@ src/
   pipeline/             extract (Claude), facts, template, render (Chromium), process
   jobs.js posts.js db.js logger.js imagehash.js
   cli/fb-check.js       live access check against real Pages
+scripts/                render:sample, extract:check
 public/                 dashboard (no build step)
-templates/placeholder/  neutral stand-in template (replace, see docs/TEMPLATE.md)
+templates/ibn7bharat/   IBN7 Bharat template (default) + reference posters
+templates/placeholder/  neutral fallback template (output always DRAFT)
 test/                   node:test suites
 ```

@@ -13,6 +13,26 @@ your app**.
 > monitoring as working until `npm run fb:check -- <page url>` succeeds against your
 > real Pages (see the last section).
 
+## Your source Page: "Live Cities"
+
+You named **Live Cities** (a news channel) as the Page to monitor. Its URL has not been
+supplied yet. Please send the exact `facebook.com/...` address.
+
+Live Cities is not an IBN7 Bharat Page, so it falls in the third row of the table below.
+The Graph API will only return its posts if one of these is true:
+
+1. **Live Cities grants your business access.** Their Page admin adds your Business
+   portfolio as a partner, or gives your system user a task on their Page, in Meta
+   Business Suite. This is the realistic route, and it also documents permission to
+   reuse their content.
+2. Meta approves your app for **Page Public Content Access**. This is unlikely for this
+   use case.
+
+Until one of those is in place, add Live Cities in the dashboard anyway. It will show
+*no access* with the reason. Process its posters through **Manual import**: save or
+screenshot the poster, upload it with the post link, and everything after that (text,
+template, review, PNG) is the same.
+
 ## Which method works for which Page
 
 | Source Page | Supported method | Works? |

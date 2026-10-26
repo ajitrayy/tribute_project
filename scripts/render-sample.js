@@ -4,10 +4,10 @@ import path from 'node:path';
 import { closeRenderer, renderPoster } from '../src/pipeline/render.js';
 import { loadTemplate } from '../src/pipeline/template.js';
 
-const [id = 'placeholder', out = 'sample.png', logo] = process.argv.slice(2);
+const [id = 'ibn7bharat', out = 'sample.png', logo] = process.argv.slice(2);
 const fields = {
   category_label: 'ब्रेकिंग न्यूज़',
-  headline: 'प्रयागराज में गंगा का जलस्तर खतरे के निशान के पार, १२ गाँवों में अलर्ट',
+  headline: '[b]प्रयागराज[/b] में [r]गंगा का जलस्तर खतरे के निशान के पार[/r],\n१२ गाँवों में [r]अलर्ट[/r]',
   subheadline: 'ज़िला प्रशासन ने निचले इलाकों को खाली कराने के निर्देश दिए',
   body_lines: ['एनडीआरएफ की 3 टीमें तैनात', 'स्कूल अगले 2 दिन बंद रहेंगे'],
   location: 'प्रयागराज',

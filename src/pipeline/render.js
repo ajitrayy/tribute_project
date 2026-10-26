@@ -37,10 +37,18 @@ export async function closeRenderer() {
 const FIT_SCRIPT = `
   for (const el of document.querySelectorAll('[data-fit]')) {
     const min = Number(el.dataset.fitMin || 24);
-    let size = parseFloat(getComputedStyle(el).fontSize);
-    const over = () => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+    const cs = getComputedStyle(el);
+    let size = parseFloat(cs.fontSize);
+    // With a max-height, compare the laid-out height of the lines against it.
+    // scrollHeight would also count Devanagari matras that rise above tight
+    // line boxes and report overflow for text that fits.
+    const maxH = cs.maxHeight === 'none' ? null : parseFloat(cs.maxHeight);
+    if (maxH !== null) el.style.maxHeight = 'none';
+    const tall = () => (maxH !== null ? el.offsetHeight > maxH + 1 : el.scrollHeight > el.clientHeight + 1);
+    const over = () => tall() || el.scrollWidth > el.clientWidth + 1;
     while (over() && size > min) { size -= 1; el.style.fontSize = size + 'px'; }
     el.dataset.fitResult = over() ? 'overflow' : String(size);
+    if (maxH !== null) el.style.maxHeight = '';
   }
 `;
 

@@ -15,6 +15,7 @@
     <label>Every <input id="mon-interval" type="number" min="1" max="1440" step="1"> min</label>
     <button id="mon-toggle"></button>
     <button id="mon-poll" class="secondary">Check now</button>
+    <span id="mon-verified" class="pill"></span>
   </div>
 </header>
 
@@ -114,21 +115,34 @@
         <button id="d-force" class="secondary" hidden>Process anyway</button>
       </div>
       <div id="d-warnings"></div>
-      <h3>Source</h3>
-      <div id="d-source" class="preview small"></div>
+      <h3>Source <span class="muted">– drag on the image to select a photo area</span></h3>
+      <div id="d-source" class="preview small crop-host"></div>
+      <div class="row wrap"><button id="d-crop" class="secondary" disabled>Use selected area as photo</button><span id="d-crop-info" class="muted"></span></div>
       <p id="d-source-meta" class="muted"></p>
       <details><summary>Caption &amp; transcription</summary><pre id="d-caption"></pre><pre id="d-fulltext"></pre></details>
       <details><summary>Versions &amp; jobs</summary><div id="d-versions"></div></details>
     </div>
     <form class="col stack" id="d-form">
       <h3>Edit text</h3>
-      <label>Label / strap <input name="category_label"></label>
-      <label>Headline <textarea name="headline" rows="3" required></textarea></label>
-      <label>Sub-headline <textarea name="subheadline" rows="2"></textarea></label>
-      <label>Body lines (one per line) <textarea name="body_lines" rows="5"></textarea></label>
-      <div class="row"><label>Location <input name="location"></label><label>Date <input name="date_text"></label></div>
+      <label data-field="category_label"><span>Label / strap</span> <input name="category_label"></label>
+      <div data-field="headline" class="field"><span>Headline</span>
+        <div class="row colorbar">
+          <button type="button" class="secondary swatch" data-color="r" title="Make selected words red">Red</button>
+          <button type="button" class="secondary swatch" data-color="b" title="Make selected words blue">Blue</button>
+          <button type="button" class="secondary swatch" data-color="" title="Make selected words black">Black</button>
+          <span class="muted">select words, then pick a colour · Enter = new line</span>
+        </div>
+        <textarea name="headline" rows="4" required></textarea>
+        <div id="d-headline-preview" class="headline-preview"></div>
+      </div>
+      <label data-field="subheadline"><span>Sub-headline</span> <textarea name="subheadline" rows="2"></textarea></label>
+      <label data-field="body_lines"><span>Body lines (one per line)</span> <textarea name="body_lines" rows="4"></textarea></label>
+      <div class="row"><label data-field="location"><span>Location</span> <input name="location"></label><label data-field="date_text"><span>Date</span> <input name="date_text"></label></div>
+      <p id="d-unused" class="muted"></p>
       <button>Save &amp; re-render</button>
-      <label>Photo for the poster (optional) <input id="d-photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
+      <h3>Photo</h3>
+      <div class="row"><div id="d-photo-preview" class="photo-thumb"></div><span id="d-photo-origin" class="muted"></span></div>
+      <label>Upload a different photo <input id="d-photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
       <button type="button" id="d-photo-remove" class="secondary">Remove photo</button>
     </form>
   </div>

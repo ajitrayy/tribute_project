@@ -23,22 +23,34 @@ function multiset(list) {
   return m;
 }
 
-export function posterText(fields) {
-  return [fields.category_label, fields.headline, fields.subheadline, ...(fields.body_lines || []), fields.location, fields.date_text]
+const MARKUP = /\[\/?(r|b)\]/g;
+
+/** The text that will actually be printed: colour markup removed, unused fields left out. */
+export function posterText(fields, used = null) {
+  const on = (k) => !used || used.includes(k);
+  return [
+    on('category_label') && fields.category_label,
+    on('headline') && fields.headline,
+    on('subheadline') && fields.subheadline,
+    ...(on('body_lines') ? fields.body_lines || [] : []),
+    on('location') && fields.location,
+    on('date_text') && fields.date_text,
+  ]
     .filter(Boolean)
-    .join('\n');
+    .join('\n')
+    .replace(MARKUP, '');
 }
 
 const squash = (s) => String(s || '').replace(/\s+/g, '').normalize('NFC');
 
-export function factCheck(extraction, fields) {
+export function factCheck(extraction, fields, { usedFields = null } = {}) {
   const warnings = [];
   if (!extraction) {
     return { checked: false, warnings: [{ level: 'info', message: 'No machine transcription to compare against - verify facts against the source poster manually.' }] };
   }
   const branding = new Set((extraction.source_branding || []).map(squash));
   const sourceText = String(extraction.full_text || '');
-  const out = posterText(fields);
+  const out = posterText(fields, usedFields);
 
   const srcNums = multiset(numbersIn(sourceText));
   const outNums = multiset(numbersIn(out));
@@ -76,7 +88,14 @@ export function factCheck(extraction, fields) {
   for (const u of extraction.uncertain || []) {
     warnings.push({ level: 'warn', message: `Extractor was unsure about "${u}" - check against the source.` });
   }
-  if (!fields.headline?.trim()) warnings.push({ level: 'error', message: 'Headline is empty.' });
+  if (!fields.headline?.replace(MARKUP, '').trim()) warnings.push({ level: 'error', message: 'Headline is empty.' });
+  if (usedFields) {
+    const dropped = ['category_label', 'location', 'date_text', 'subheadline', 'body_lines']
+      .filter((k) => !usedFields.includes(k) && (Array.isArray(fields[k]) ? fields[k].length : fields[k]));
+    for (const k of dropped) {
+      warnings.push({ level: 'warn', message: `"${k}" has text but this template does not print it - move it into a printed field if it matters.` });
+    }
+  }
 
   return { checked: true, warnings };
 }

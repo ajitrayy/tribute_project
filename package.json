@@ -13,7 +13,8 @@
     "worker": "node --disable-warning=ExperimentalWarning src/main.js worker",
     "fb:check": "node --disable-warning=ExperimentalWarning src/cli/fb-check.js",
     "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.js\"",
-    "render:sample": "node --disable-warning=ExperimentalWarning scripts/render-sample.js"
+    "render:sample": "node --disable-warning=ExperimentalWarning scripts/render-sample.js",
+    "extract:check": "node --disable-warning=ExperimentalWarning scripts/extract-check.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

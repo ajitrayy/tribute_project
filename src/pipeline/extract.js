@@ -24,6 +24,7 @@ export const EXTRACTION_SCHEMA = {
   required: [
     'is_news_poster', 'not_news_reason', 'category_label', 'headline', 'subheadline', 'body_lines',
     'location', 'date_text', 'people', 'places', 'numbers', 'source_branding', 'full_text', 'uncertain',
+    'headline_markup', 'photo_box',
   ],
   properties: {
     is_news_poster: { type: 'boolean' },
@@ -40,6 +41,16 @@ export const EXTRACTION_SCHEMA = {
     source_branding: strList,
     full_text: str,
     uncertain: strList,
+    headline_markup: str,
+    photo_box: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['x', 'y', 'width', 'height', 'has_overlaid_branding'],
+      properties: {
+        x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' },
+        has_overlaid_branding: { type: 'boolean' },
+      },
+    },
   },
 };
 
@@ -56,6 +67,8 @@ Rules:
 - people, places, numbers: list each as it appears in the text (these are used to verify the rebuilt poster).
 - full_text: every piece of text on the image in reading order, including branding.
 - uncertain: words or numbers you could not read with confidence.
+- headline_markup: the headline text again, character for character, with emphasis tags added for the IBN7 Bharat colour style: wrap the most important news phrase(s) in [r]...[/r] (red) and, optionally, the subject / place / date phrase in [b]...[/b] (blue). Leave everything else untagged (black). Do not nest tags and do not change, add or remove any other character. Put a newline where the source poster breaks the headline into lines.
+- photo_box: the main photograph on the poster (a person, scene or place), as fractions of the image width/height (x, y = top-left corner, 0-1). Choose the largest rectangle that contains photo only - exclude headline text, captions, logos, social-media handles and borders. Set has_overlaid_branding to true if the source outlet's logo or handle is printed on top of that area. If there is no photograph, return all zeros.
 - If the image is not a news poster (advertisement, meme, greeting, photo without news text), set is_news_poster to false, explain briefly in not_news_reason, and leave the other fields empty.`;
 
 let client;
@@ -139,7 +152,7 @@ export async function extractPoster(imageBuffer, { caption = '' } = {}) {
 export function fieldsFromExtraction(x) {
   return {
     category_label: x?.category_label || '',
-    headline: x?.headline || '',
+    headline: headlineWithMarkup(x),
     subheadline: x?.subheadline || '',
     body_lines: Array.isArray(x?.body_lines) ? x.body_lines.filter(Boolean) : [],
     location: x?.location || '',
@@ -148,3 +161,24 @@ export function fieldsFromExtraction(x) {
 }
 
 export const EMPTY_FIELDS = fieldsFromExtraction(null);
+
+const squash = (s) => String(s || '').replace(/\[\/?(r|b)\]/g, '').replace(/\s+/g, '');
+
+/** Use the model's colour markup only if it left the words exactly as transcribed. */
+export function headlineWithMarkup(x) {
+  const plain = x?.headline || '';
+  const marked = x?.headline_markup || '';
+  return marked && squash(marked) === squash(plain) ? marked.trim() : plain;
+}
+
+/** Normalized photo crop, or null if the model found no usable photograph. */
+export function photoBox(x) {
+  const b = x?.photo_box;
+  if (!b) return null;
+  const c = (v) => Math.min(1, Math.max(0, Number(v) || 0));
+  const box = { x: c(b.x), y: c(b.y), width: c(b.width), height: c(b.height) };
+  box.width = Math.min(box.width, 1 - box.x);
+  box.height = Math.min(box.height, 1 - box.y);
+  if (box.width < 0.2 || box.height < 0.15) return null;
+  return { ...box, hasBranding: Boolean(b.has_overlaid_branding) };
+}

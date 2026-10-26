@@ -6,7 +6,7 @@ import { getDb, getSetting } from '../db.js';
 import { hamming, dHash } from '../imagehash.js';
 import { log } from '../logger.js';
 import { addRender, findNearDuplicate, getPost, updatePost } from '../posts.js';
-import { EMPTY_FIELDS, ExtractionError, ExtractionUnavailable, extractPoster, fieldsFromExtraction } from './extract.js';
+import { EMPTY_FIELDS, ExtractionError, ExtractionUnavailable, extractPoster, fieldsFromExtraction, photoBox } from './extract.js';
 import { factCheck } from './facts.js';
 import { renderPoster } from './render.js';
 import { loadTemplate } from './template.js';
@@ -49,6 +49,46 @@ export function photoPathFor(postId) {
   if (!fs.existsSync(dir)) return null;
   const f = fs.readdirSync(dir).find((n) => n.startsWith(`${postId}.`));
   return f ? path.join(dir, f) : null;
+}
+
+function clearPhoto(postId) {
+  const dir = photoDir();
+  if (!fs.existsSync(dir)) return;
+  for (const f of fs.readdirSync(dir).filter((n) => n.startsWith(`${postId}.`))) fs.unlinkSync(path.join(dir, f));
+}
+
+/** Save an uploaded photo for the poster as-is. origin: 'upload'. */
+export function savePhoto(postId, buffer, format) {
+  fs.mkdirSync(photoDir(), { recursive: true });
+  clearPhoto(postId);
+  fs.writeFileSync(path.join(photoDir(), `${postId}.${format === 'jpeg' ? 'jpg' : format}`), buffer);
+  updatePost(postId, { photo_origin: 'upload' });
+}
+
+export function removePhoto(postId) {
+  clearPhoto(postId);
+  updatePost(postId, { photo_origin: null });
+}
+
+/**
+ * Cut the photograph out of the source poster. `box` is normalized (0-1);
+ * origin is 'auto' (box from the extractor) or 'crop' (box drawn by an editor).
+ */
+export async function cropPhotoFromSource(postId, box, origin) {
+  const post = getPost(postId);
+  if (!post?.source_image_path) throw new PermanentError('no source image to crop from');
+  const src = sharp(absMedia(post.source_image_path), { failOn: 'none' });
+  const { width, height } = await src.metadata();
+  const left = Math.round(box.x * width);
+  const top = Math.round(box.y * height);
+  const w = Math.max(1, Math.min(width - left, Math.round(box.width * width)));
+  const h = Math.max(1, Math.min(height - top, Math.round(box.height * height)));
+  const out = await src.extract({ left, top, width: w, height: h }).jpeg({ quality: 92 }).toBuffer();
+  fs.mkdirSync(photoDir(), { recursive: true });
+  clearPhoto(postId);
+  fs.writeFileSync(path.join(photoDir(), `${postId}.jpg`), out);
+  updatePost(postId, { photo_origin: origin });
+  return { width: w, height: h };
 }
 
 export function activeLogoPath() {
@@ -126,6 +166,10 @@ export async function processPost(postId, { graph, force = false, reextract = fa
       updatePost(postId, { status: 'skipped', status_reason: `Not a news poster: ${extraction.not_news_reason || 'no reason given'}`, fields });
       return { status: 'skipped' };
     }
+    // Take the photograph from the source poster unless an editor chose one.
+    const box = photoBox(extraction);
+    const current = getPost(postId).photo_origin;
+    if (box && (!current || current === 'auto')) await cropPhotoFromSource(postId, box, 'auto');
   }
   updatePost(postId, { fields });
 
@@ -153,10 +197,31 @@ export async function renderStored(postId) {
   });
   const version = addRender(postId, { path: fileRel, templateId: template.id, placeholder: result.placeholder, width: result.width, height: result.height });
 
-  const check = factCheck(post.extraction, fields);
+  const check = factCheck(post.extraction, fields, { usedFields: template.fields });
+  if (post.photo_origin === 'auto') {
+    check.warnings.push({
+      level: post.extraction?.photo_box?.has_overlaid_branding ? 'error' : 'info',
+      message: post.extraction?.photo_box?.has_overlaid_branding
+        ? 'The photo was cut from the source poster and may still carry the source outlet\'s logo or handle - re-crop or upload another photo.'
+        : 'The photo was cut automatically from the source poster - check the crop, and that you may reuse it.',
+    });
+  }
   for (const o of result.overflow) check.warnings.push({ level: 'error', message: `Text does not fit in the "${o}" area even at the minimum size - shorten it.` });
   for (const r of result.draftReasons) check.warnings.push({ level: 'info', message: `Draft: ${r}.` });
   updatePost(postId, { status: 'ready', status_reason: null, fact_check: check, approved_at: null, approved_by: null });
   log.info('render', `rendered post ${postId} v${version} with template "${template.id}"`, { postId });
+  if (post.source === 'facebook' && post.page_id) markPageVerified(post.page_id, postId);
   return { status: 'ready', version };
+}
+
+/**
+ * A Page counts as verified once a post detected on it by the monitor has gone
+ * all the way to a generated poster. Until then the dashboard says monitoring
+ * of that Page is unverified.
+ */
+function markPageVerified(pageId, postId) {
+  const r = getDb()
+    .prepare('UPDATE pages SET verified_at = ?, verified_post_id = ? WHERE id = ? AND verified_at IS NULL')
+    .run(new Date().toISOString(), postId, pageId);
+  if (r.changes) log.info('monitor', `first real post (#${postId}) detected and processed end to end - Page marked verified`, { pageId, postId });
 }

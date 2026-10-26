@@ -103,7 +103,22 @@ export function openDb(file = config.dbPath) {
   db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+// Columns added after the first release; ALTER TABLE keeps existing databases working.
+const ADDED_COLUMNS = [
+  ['pages', 'verified_at', 'TEXT'],
+  ['pages', 'verified_post_id', 'INTEGER'],
+  ['posts', 'photo_origin', 'TEXT'], // auto | crop | upload
+];
+
+function migrate(d) {
+  for (const [table, col, type] of ADDED_COLUMNS) {
+    const cols = d.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    if (!cols.includes(col)) d.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+  }
 }
 
 export function getDb() {
@@ -138,7 +153,7 @@ const SETTING_DEFAULTS = {
   monitoring_paused: '0',
   poll_requested: '0',
   last_poll_at: '',
-  active_template: 'placeholder',
+  active_template: 'ibn7bharat',
   logo_path: '',
   logo_width: '',
   logo_height: '',

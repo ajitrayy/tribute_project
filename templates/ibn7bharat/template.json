@@ -1,0 +1,15 @@
+{
+  "name": "IBN7 Bharat – standard",
+  "placeholder": false,
+  "width": 1080,
+  "height": 1350,
+  "scale": 1,
+  "requiresLogo": true,
+  "fields": ["headline", "subheadline", "body_lines"],
+  "fieldLabels": {
+    "headline": "Headline – mark words [r]red[/r] / [b]blue[/b]; unmarked words are black",
+    "subheadline": "Red box line (e.g. quote attribution “- नाम, पद”)",
+    "body_lines": "Extra lines under the headline (optional)"
+  },
+  "notes": "Measured from reference/01-bihar-weather.jpg. Headline face is Noto Sans Devanagari ExtraCondensed Black (OFL) as a stand-in for the brand font."
+}
