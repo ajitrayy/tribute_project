@@ -2,7 +2,9 @@
 # tag in step with the "playwright" version in package.json.
 FROM mcr.microsoft.com/playwright:v1.63.0-noble
 
-ENV NODE_ENV=production DATA_DIR=/data PORT=3000
+# HOST=0.0.0.0: listen on all container interfaces so the published port works
+# (outside Docker the app defaults to 127.0.0.1, this computer only).
+ENV NODE_ENV=production DATA_DIR=/data PORT=3000 HOST=0.0.0.0
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force

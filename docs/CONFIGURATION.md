@@ -10,8 +10,8 @@ Bharat PNG uses only:
   browser. Nothing is sent to an outside service, and there is nothing to pay for.
 * Headless Chromium (Playwright) on the server for rendering the PNG.
 
-The only setting you need is a dashboard password once the app is reachable by
-anyone else:
+By default the app listens on `127.0.0.1`, so only the computer it runs on can open
+it. Still, set a dashboard password, in a `.env` file in the project folder (git-ignored):
 
 ```env
 ADMIN_USER=admin
@@ -26,6 +26,7 @@ Generate one with `openssl rand -base64 24`.
 |---|---|---|
 | `FB_APP_ID`, `FB_APP_SECRET`, `FB_USER_ACCESS_TOKEN`, `FB_PAGE_ACCESS_TOKENS`, `FB_PPCA_APPROVED` | **Automatic Facebook monitoring only.** Manual import never uses them. | Without them the dashboard shows *"Facebook monitoring: not configured – manual import only"*. See docs/FACEBOOK_ACCESS.md for how to obtain them and what they can read. |
 | `EXTRACTION_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` | Optional **paid** vision-model extraction. **Not part of the free workflow.** | Off unless `EXTRACTION_PROVIDER=anthropic` is set explicitly. A key on its own does nothing. Leave both unset for the free workflow. |
+| `HOST` | Which network address the dashboard listens on | Default `127.0.0.1`: only this computer can open it. `0.0.0.0`: other devices on the network can too (the Docker image and docker-compose set this). Only change it together with a strong `ADMIN_PASSWORD` and, beyond your own network, HTTPS. |
 | `PORT`, `DATA_DIR`, worker settings | Server tuning | See `.env.example`. |
 
 ## Keeping any secrets safe

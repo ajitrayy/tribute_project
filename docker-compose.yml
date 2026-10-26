@@ -5,7 +5,7 @@ services:
     build: .
     command: ["node", "--disable-warning=ExperimentalWarning", "src/main.js", "web"]
     env_file: .env
-    environment: { NODE_ENV: production, DATA_DIR: /data }
+    environment: { NODE_ENV: production, DATA_DIR: /data, HOST: 0.0.0.0 }
     ports: ["3000:3000"]
     volumes: [data:/data, ./templates:/app/templates:ro]
     restart: unless-stopped

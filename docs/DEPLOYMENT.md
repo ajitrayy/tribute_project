@@ -25,7 +25,8 @@ docker compose up -d --build
 docker compose exec worker npm run fb:check -- https://www.facebook.com/YourPage
 ```
 
-The dashboard listens on port 3000. Put it behind HTTPS (Caddy, nginx, a cloud load
+The dashboard listens on port 3000. The image sets `HOST=0.0.0.0` so the published port
+works inside the container. Outside Docker the default is `127.0.0.1` (local only). Put it behind HTTPS (Caddy, nginx, a cloud load
 balancer). The dashboard uses HTTP Basic auth, which is only safe over TLS.
 
 `./templates` is mounted read-only, so you can add or adjust the official template
@@ -39,6 +40,8 @@ npm ci --omit=dev
 npx playwright install --with-deps chromium
 cp .env.example .env && $EDITOR .env
 NODE_ENV=production npm start          # or run `npm run web` and `npm run worker` under systemd
+# listens on 127.0.0.1:3000 - put a reverse proxy (Caddy/nginx) with HTTPS in front,
+# or set HOST=0.0.0.0 only if the server must accept connections directly
 ```
 
 Example systemd unit for the combined process:

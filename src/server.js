@@ -445,8 +445,13 @@ export function createApp({ graph = new GraphClient() } = {}) {
   return app;
 }
 
-export function startServer() {
+export function startServer({ host = config.host, port = config.port } = {}) {
   if (!config.admin.password) console.warn('WARNING: ADMIN_PASSWORD is not set - the dashboard is unprotected. Set it before exposing the app.');
   const app = createApp();
-  return app.listen(config.port, () => log.info('http', `dashboard listening on http://localhost:${config.port}`));
+  const server = app.listen(port, host, () => {
+    const { port: actual } = server.address();
+    const local = host === '127.0.0.1' || host === 'localhost' || host === '::1';
+    log.info('http', `dashboard listening on http://${local ? '127.0.0.1' : host}:${actual}${local ? ' (this computer only)' : ''}`);
+  });
+  return server;
 }

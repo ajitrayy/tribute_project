@@ -28,6 +28,9 @@ const dataDir = path.resolve(ROOT, process.env.DATA_DIR || 'data');
 export const config = {
   env: process.env.NODE_ENV || 'development',
   port: int('PORT', 3000),
+  // Network address the dashboard listens on. 127.0.0.1 = this computer only;
+  // Docker sets 0.0.0.0 so the container's port can be published.
+  host: process.env.HOST || '127.0.0.1',
   dataDir,
   dbPath: path.join(dataDir, 'app.db'),
   mediaDir: path.join(dataDir, 'media'),

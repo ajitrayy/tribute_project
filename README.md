@@ -28,13 +28,23 @@ Requires Node.js 22.13+. From the project folder:
 ```bash
 npm install                      # once: app + free OCR engine and Hindi/English data
 npx playwright install chromium  # once: the headless browser that renders the PNG
-npm start                        # dashboard + worker on http://localhost:3000
+npm start                        # dashboard + worker on http://127.0.0.1:3000
 ```
 
-On Linux servers use `npx playwright install --with-deps chromium` to also install the
-browser's system libraries. Without `ADMIN_PASSWORD` the dashboard has no login, which
-is fine on your own computer. Set one before anyone else can reach it
-(docs/CONFIGURATION.md).
+Open **http://127.0.0.1:3000** (or http://localhost:3000). By default the app listens on
+`127.0.0.1` only, so other devices on your network cannot reach it. Set `HOST=0.0.0.0` to
+allow that (Docker does this automatically).
+
+Set a dashboard password in a `.env` file in the project folder (it is git-ignored):
+
+```
+ADMIN_USER=admin
+ADMIN_PASSWORD=<a long password>
+```
+
+Without `ADMIN_PASSWORD` the dashboard has no login. On Linux servers use
+`npx playwright install --with-deps chromium` to also install the browser's system
+libraries. More in docs/CONFIGURATION.md.
 
 ## Make a poster (free workflow)
 
