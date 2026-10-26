@@ -1,0 +1,21 @@
+# Web dashboard and background worker as separate processes sharing one data
+# volume (SQLite in WAL mode). Run a single worker; it owns monitoring and jobs.
+services:
+  web:
+    build: .
+    command: ["node", "--disable-warning=ExperimentalWarning", "src/main.js", "web"]
+    env_file: .env
+    environment: { NODE_ENV: production, DATA_DIR: /data, HOST: 0.0.0.0 }
+    ports: ["3000:3000"]
+    volumes: [data:/data, ./templates:/app/templates:ro]
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["node", "--disable-warning=ExperimentalWarning", "src/main.js", "worker"]
+    env_file: .env
+    environment: { NODE_ENV: production, DATA_DIR: /data }
+    volumes: [data:/data, ./templates:/app/templates:ro]
+    restart: unless-stopped
+    healthcheck: { disable: true }
+volumes:
+  data:

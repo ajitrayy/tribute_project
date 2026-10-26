@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poster Generator</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="bar">
+  <h1>IBN7 Bharat · Poster Generator</h1>
+  <div class="monitor" id="monitor">
+    <span class="dot" id="mon-dot"></span>
+    <span id="mon-text">…</span>
+    <label>Every <input id="mon-interval" type="number" min="1" max="1440" step="1"> min</label>
+    <button id="mon-toggle"></button>
+    <button id="mon-poll" class="secondary">Check now</button>
+    <span id="mon-verified" class="pill"></span>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="posters" class="active">Posters</button>
+  <button data-tab="pages">Facebook Pages</button>
+  <button data-tab="import">Manual import</button>
+  <button data-tab="branding">Branding &amp; template</button>
+  <button data-tab="logs">Logs</button>
+</nav>
+
+<div id="notice" class="banner" hidden></div>
+<div id="banner" class="banner" hidden></div>
+
+<main>
+  <section id="tab-posters" class="tab">
+    <div class="filters">
+      <select id="f-status">
+        <option value="ready,needs_input,queued,processing,failed">Needs attention</option>
+        <option value="ready">Awaiting review</option>
+        <option value="approved">Approved</option>
+        <option value="needs_input">Needs text</option>
+        <option value="queued,processing">In progress</option>
+        <option value="failed">Failed</option>
+        <option value="duplicate">Duplicates</option>
+        <option value="skipped,baseline">Skipped / baseline</option>
+        <option value="">All history</option>
+      </select>
+      <input id="f-q" type="search" placeholder="Search text…">
+      <span id="f-count" class="muted"></span>
+      <span class="spacer"></span>
+      <button id="rerender-all" class="secondary" title="Re-render every poster awaiting review with the current template and logo">Re-render all</button>
+    </div>
+    <div id="poster-grid" class="grid"></div>
+    <div id="history-table"></div>
+  </section>
+
+  <section id="tab-pages" class="tab" hidden>
+    <form id="page-form" class="card row">
+      <input id="page-url" type="url" placeholder="https://www.facebook.com/PageName" required>
+      <label class="muted">Backfill <input id="page-backfill" type="number" min="0" max="72" value="0" style="width:4em"> h</label>
+      <button>Add Page</button>
+    </form>
+    <p class="muted">New Pages are checked immediately. Only posts published after a Page is added (minus the backfill window) are processed. See <code>docs/FACEBOOK_ACCESS.md</code> for which Pages can be read.</p>
+    <div id="fb-config" class="card"></div>
+    <table class="table" id="pages-table"></table>
+  </section>
+
+  <section id="tab-import" class="tab" hidden>
+    <form id="import-form" class="card stack">
+      <p>Upload a poster image saved or screenshotted from Facebook. No Facebook or AI keys are needed: the editor opens and reads the Hindi text with free in-browser OCR, which you then check and correct (or type the text yourself).</p>
+      <label>Poster image <input name="image" type="file" accept="image/*" required></label>
+      <label>Source post link <input name="source_url" type="url" placeholder="https://www.facebook.com/…/posts/…"></label>
+      <label>Caption (optional) <textarea name="caption" rows="3"></textarea></label>
+      <button>Import &amp; generate</button>
+    </form>
+  </section>
+
+  <section id="tab-branding" class="tab" hidden>
+    <div class="card">
+      <h2>Official logo</h2>
+      <p class="muted">Stored exactly as uploaded and drawn at its original aspect ratio. PNG with transparency or SVG preferred.</p>
+      <div class="row"><div id="logo-preview" class="logo-preview"></div>
+        <form id="logo-form" class="stack"><input name="logo" type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" required><button>Upload logo</button></form>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Template</h2>
+      <div class="row"><select id="template-select"></select><button id="template-save">Use template</button></div>
+      <p id="template-note" class="muted"></p>
+      <div id="references" class="refs"></div>
+    </div>
+  </section>
+
+  <section id="tab-logs" class="tab" hidden>
+    <div class="filters">
+      <select id="log-level"><option value="">All levels</option><option>error</option><option>warn</option><option>info</option></select>
+      <button id="log-refresh" class="secondary">Refresh</button>
+    </div>
+    <table class="table logs" id="logs-table"></table>
+  </section>
+</main>
+
+<dialog id="detail">
+  <div class="detail-head">
+    <h2 id="d-title"></h2>
+    <button class="secondary" id="d-close" aria-label="Close">✕</button>
+  </div>
+  <div class="detail-body">
+    <div class="col">
+      <h3>Generated poster <span id="d-version" class="muted"></span></h3>
+      <div id="d-generated" class="preview"></div>
+      <div class="row wrap">
+        <a id="d-download" class="button">Download PNG</a>
+        <button id="d-approve">Approve</button>
+        <button id="d-regenerate" class="secondary" title="Read the source poster again and rebuild">Regenerate</button>
+        <button id="d-force" class="secondary" hidden>Process anyway</button>
+      </div>
+      <div id="d-warnings"></div>
+      <h3>Source <span class="muted">– drag on the image to select a photo area</span></h3>
+      <div id="d-source" class="preview small crop-host"></div>
+      <div class="row wrap"><button id="d-crop" class="secondary" disabled>Use selected area as photo</button><span id="d-crop-info" class="muted"></span></div>
+      <div class="ocr-box">
+        <div class="row wrap">
+          <button id="d-ocr" type="button">Read text (OCR)</button>
+          <span id="d-ocr-status" class="muted">Free Hindi OCR runs in this browser (Tesseract.js). If an area is selected above, only that area is read.</span>
+        </div>
+        <details id="d-ocr-details" hidden><summary>OCR text</summary><pre id="d-ocr-text"></pre></details>
+      </div>
+      <p id="d-source-meta" class="muted"></p>
+      <details><summary>Caption &amp; transcription</summary><pre id="d-caption"></pre><pre id="d-fulltext"></pre></details>
+      <details><summary>Versions &amp; jobs</summary><div id="d-versions"></div></details>
+    </div>
+    <form class="col stack" id="d-form">
+      <h3>Edit text</h3>
+      <label data-field="category_label"><span>Label / strap</span> <input name="category_label"></label>
+      <div data-field="headline" class="field"><span>Headline</span>
+        <div class="row colorbar">
+          <button type="button" class="secondary swatch" data-color="r" title="Make selected words red">Red</button>
+          <button type="button" class="secondary swatch" data-color="b" title="Make selected words blue">Blue</button>
+          <button type="button" class="secondary swatch" data-color="" title="Make selected words black">Black</button>
+          <span class="muted">select words, then pick a colour · Enter = new line</span>
+        </div>
+        <textarea name="headline" rows="4" required></textarea>
+        <div id="d-headline-preview" class="headline-preview"></div>
+      </div>
+      <label data-field="subheadline"><span>Sub-headline</span> <textarea name="subheadline" rows="2"></textarea></label>
+      <label data-field="body_lines"><span>Body lines (one per line)</span> <textarea name="body_lines" rows="4"></textarea></label>
+      <div class="row"><label data-field="location"><span>Location</span> <input name="location"></label><label data-field="date_text"><span>Date</span> <input name="date_text"></label></div>
+      <p id="d-unused" class="muted"></p>
+      <button>Save &amp; re-render</button>
+      <h3>Photo</h3>
+      <div class="row"><div id="d-photo-preview" class="photo-thumb"></div><span id="d-photo-origin" class="muted"></span></div>
+      <label>Upload a different photo <input id="d-photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
+      <button type="button" id="d-photo-remove" class="secondary">Remove photo</button>
+    </form>
+  </div>
+</dialog>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>

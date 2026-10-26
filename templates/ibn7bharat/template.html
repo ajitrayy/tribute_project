@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<!--
+  IBN7 Bharat standard poster, 1080x1350. Positions measured from
+  reference/01-bihar-weather.jpg:
+    logo        x 462-612, y 49-105 (56px tall), centred
+    rules       2px red at y 79-80, x 190-443 and 632-889
+    headline    centred, 3 lines on a ~135px pitch, blue/red/black words
+    photo       fills the space down to the footer, fading to white at its top
+    footer      white band y 1281-1333 with social icons + handle, 16px red bar
+-->
+<style>
+  @font-face { font-family: "IBN Headline"; font-weight: 100 900; font-stretch: 62.5% 100%;
+    src: url("{{asset:fonts/noto-sans-devanagari-wdth-devanagari.woff2}}") format("woff2");
+    unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF; }
+  @font-face { font-family: "IBN Headline"; font-weight: 100 900; font-stretch: 62.5% 100%;
+    src: url("{{asset:fonts/noto-sans-devanagari-wdth-latin.woff2}}") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; }
+
+  :root { --red: #e0141b; --rule: #c8161d; --blue: #0130a4; --black: #000; --bar: #d4040f; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1350px; }
+  body {
+    position: relative; overflow: hidden; background: #fff; color: var(--black);
+    font-family: "IBN Headline", sans-serif; font-stretch: 62.5%; font-weight: 900;
+    -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
+    display: flex; flex-direction: column;
+  }
+
+  /* Halftone dot texture in the upper corners, fading towards the centre. */
+  .dots { position: absolute; top: 0; width: 340px; height: 640px; pointer-events: none;
+    background: radial-gradient(circle, #cfcfcf 1.7px, transparent 2.2px) 0 0 / 15px 15px; }
+  .dots.left  { left: 0;  -webkit-mask-image: linear-gradient(to right, #000 0%, transparent 70%), linear-gradient(to bottom, #000 40%, transparent 100%); -webkit-mask-composite: source-in; mask-composite: intersect; }
+  .dots.right { right: 0; -webkit-mask-image: linear-gradient(to left,  #000 0%, transparent 70%), linear-gradient(to bottom, #000 40%, transparent 100%); -webkit-mask-composite: source-in; mask-composite: intersect; }
+
+  .masthead { position: relative; height: 130px; flex: none; }
+  .rule { position: absolute; top: 79px; height: 2px; background: var(--rule); }
+  .rule.l { left: 190px; width: 253px; }
+  .rule.r { left: 632px; width: 257px; }
+  /* Official logo: fixed height, natural width - never stretched. */
+  .logo { position: absolute; top: 49px; left: 50%; transform: translateX(-50%); height: 56px; max-width: 300px; }
+  .logo img { height: 56px; width: auto; max-width: 300px; object-fit: contain; display: block; }
+  .logo.missing { width: 150px; border: 2px dashed #bbb; font: 700 18px sans-serif; color: #999; display: flex; align-items: center; justify-content: center; }
+
+  .text { position: relative; flex: none; padding: 22px 0 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  /* The brand face is narrower than any open Devanagari font, so text is laid
+     out in a box 1/0.86 wider and compressed horizontally. Glyphs stay vector. */
+  .squeeze { --sx: 0.68; width: calc(1012px / var(--sx)); transform: scaleX(var(--sx)); transform-origin: center top; margin: 0 calc((1012px - 1012px / var(--sx)) / 2); }
+  .headline {
+    max-height: 450px; overflow: hidden; text-align: center; padding-top: 8px;
+    font-size: 118px; line-height: 1.17; letter-spacing: 0; word-spacing: -0.04em; -webkit-text-stroke: 3px currentColor;
+    text-wrap: balance;
+  }
+  .headline .r { color: var(--red); }
+  .headline .b { color: var(--blue); }
+  .strapwrap { display: flex; justify-content: center; }
+  .strap { background: var(--red); color: #fff; font-size: 92px; -webkit-text-stroke: 2px currentColor; line-height: 1.2; padding: 0 22px 8px; text-align: center; max-height: 180px; overflow: hidden; word-spacing: -0.06em; }
+  .body { text-align: center; font-size: 66px; -webkit-text-stroke: 1.5px currentColor; line-height: 1.2; max-height: 210px; overflow: hidden; word-spacing: -0.06em; }
+
+  .photo { position: relative; flex: 1 1 auto; min-height: 380px; margin-top: 14px; overflow: hidden; }
+  .photo img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; display: block; }
+  .photo::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 150px; z-index: 1;
+    background: linear-gradient(to bottom, #fff 0%, rgba(255,255,255,.75) 35%, rgba(255,255,255,0) 100%); }
+  .nophoto { flex: 1 1 auto; }
+  /* Without a photo the text block is centred in the space above the footer. */
+  body.no-photo .text { flex: 1 1 auto; justify-content: center; padding-bottom: 40px; }
+  body.no-photo .nophoto { display: none; }
+
+  .footer { flex: none; height: 69px; background: #fff; position: relative; }
+  .footer .social { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); height: 49px; display: block; }
+  .footer .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 16px; background: var(--bar); }
+</style>
+</head>
+<body class="{{^has_photo}}no-photo{{/has_photo}}">
+  <div class="dots left"></div><div class="dots right"></div>
+
+  <div class="masthead">
+    <div class="rule l"></div><div class="rule r"></div>
+    {{#has_logo}}<div class="logo"><img src="{{{logo_src}}}" alt=""></div>{{/has_logo}}
+    {{^has_logo}}<div class="logo missing">LOGO</div>{{/has_logo}}
+  </div>
+
+  <div class="text">
+    <div class="headline squeeze" data-fit="headline" data-fit-min="60">{{{headline_html}}}</div>
+    {{#subheadline}}<div class="strapwrap squeeze"><div class="strap" data-fit="red box" data-fit-min="40">{{subheadline}}</div></div>{{/subheadline}}
+    {{#has_body}}<div class="body squeeze" data-fit="extra lines" data-fit-min="32">{{#body_lines}}<div>{{.}}</div>{{/body_lines}}</div>{{/has_body}}
+  </div>
+
+  {{#has_photo}}<div class="photo"><img src="{{{photo_src}}}" alt=""></div>{{/has_photo}}
+  {{^has_photo}}<div class="nophoto"></div>{{/has_photo}}
+
+  <div class="footer">
+    <img class="social" src="{{asset:assets/footer-social.png}}" alt="">
+    <div class="bar"></div>
+  </div>
+</body>
+</html>

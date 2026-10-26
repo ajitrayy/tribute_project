@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<!--
+  PLACEHOLDER TEMPLATE. Neutral greys only - it deliberately does not attempt the
+  IBN7 Bharat look. Replace with templates/ibn7bharat/ built from the official
+  reference posters (see docs/TEMPLATE.md). Renders from this template are marked
+  DRAFT and cannot be approved.
+-->
+<style>
+  @font-face { font-family: "Noto Sans Devanagari"; font-weight: 500; src: url("{{asset:fonts/noto-sans-devanagari-500.woff2}}") format("woff2"); }
+  @font-face { font-family: "Noto Sans Devanagari"; font-weight: 700; src: url("{{asset:fonts/noto-sans-devanagari-700.woff2}}") format("woff2"); }
+  @font-face { font-family: "Noto Sans Devanagari"; font-weight: 800; src: url("{{asset:fonts/noto-sans-devanagari-800.woff2}}") format("woff2"); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: {{width}}px; height: {{height}}px; }
+  body {
+    font-family: "Noto Sans Devanagari", sans-serif;
+    background: #f2f2f2; color: #111;
+    display: flex; flex-direction: column; overflow: hidden;
+    -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
+  }
+  .top { height: 150px; padding: 30px 48px; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 4px solid #333; }
+  /* The logo keeps its intrinsic aspect ratio inside this box (object-fit: contain). */
+  .logo { width: 300px; height: 90px; display: flex; align-items: center; }
+  .logo img { width: 100%; height: 100%; object-fit: contain; object-position: left center; display: block; }
+  .logo.missing { border: 3px dashed #999; justify-content: center; font: 700 22px sans-serif; color: #999; }
+  .label { background: #333; color: #fff; font-weight: 700; font-size: 34px; padding: 6px 26px; border-radius: 6px; }
+  .photo { height: 360px; background: #ccc; }
+  .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .content { flex: 1; padding: 40px 56px 24px; display: flex; flex-direction: column; gap: 22px; min-height: 0; }
+  .headline { font-weight: 800; font-size: 76px; line-height: 1.32; flex: 0 1 auto; min-height: 0; overflow: hidden; }
+  .sub { font-weight: 700; font-size: 44px; line-height: 1.35; color: #333; max-height: 190px; overflow: hidden; }
+  ul { list-style: none; display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow: hidden; font-size: 36px; }
+  li { font-weight: 500; line-height: 1.4; padding-left: 30px; position: relative; }
+  li::before { content: ""; position: absolute; left: 0; top: .62em; width: 14px; height: 14px; background: #333; }
+  .footer { height: 96px; background: #333; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; font-size: 32px; font-weight: 700; }
+  .note { position: absolute; bottom: 104px; right: 16px; font: 16px sans-serif; color: #888; }
+</style>
+</head>
+<body>
+  <div class="top">
+    {{#has_logo}}<div class="logo"><img src="{{{logo_src}}}" alt=""></div>{{/has_logo}}
+    {{^has_logo}}<div class="logo missing">LOGO</div>{{/has_logo}}
+    {{#category_label}}<div class="label">{{category_label}}</div>{{/category_label}}
+  </div>
+  {{#has_photo}}<div class="photo"><img src="{{{photo_src}}}" alt=""></div>{{/has_photo}}
+  <div class="content">
+    <div class="headline" data-fit="headline" data-fit-min="40">{{headline}}</div>
+    {{#subheadline}}<div class="sub" data-fit="subheadline" data-fit-min="28">{{subheadline}}</div>{{/subheadline}}
+    {{#has_body}}<ul data-fit="body" data-fit-min="24">{{#body_lines}}<li>{{.}}</li>{{/body_lines}}</ul>{{/has_body}}
+  </div>
+  <div class="footer"><span>{{location}}</span><span>{{date_text}}</span></div>
+  <div class="note">placeholder layout</div>
+</body>
+</html>
