@@ -91,7 +91,7 @@ async function toSupportedImage(buffer) {
 
 export async function extractPoster(imageBuffer, { caption = '' } = {}) {
   if (config.extraction.provider !== 'anthropic') {
-    throw new ExtractionUnavailable('Automatic extraction is off (EXTRACTION_PROVIDER=manual).');
+    throw new ExtractionUnavailable('Waiting for the poster text: use "Read text (OCR)" in the editor, or type it.');
   }
   const { data, mediaType } = await toSupportedImage(imageBuffer);
   const content = [

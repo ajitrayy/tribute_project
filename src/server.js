@@ -17,6 +17,16 @@ import { factCheck } from './pipeline/facts.js';
 import { absMedia, cropPhotoFromSource, photoPathFor, removePhoto, savePhoto, saveSourceImage } from './pipeline/process.js';
 import { listTemplates, loadTemplate } from './pipeline/template.js';
 
+const OCR_ASSETS = [
+  ['/vendor/tesseract', path.join(ROOT, 'node_modules/tesseract.js/dist')],
+  ['/vendor/tesseract-core', path.join(ROOT, 'node_modules/tesseract.js-core')],
+];
+// Hindi plus English (for acronyms such as "DG (ITBP)" on Hindi posters).
+const TESSDATA = {
+  hin: path.join(ROOT, 'node_modules/@tesseract.js-data/hin/4.0.0_best_int/hin.traineddata.gz'),
+  eng: path.join(ROOT, 'node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz'),
+};
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.maxImageBytes } });
 
 class HttpError extends Error {
@@ -77,6 +87,16 @@ export function createApp({ graph = new GraphClient() } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
+  // Free, on-device Hindi OCR: the Tesseract.js engine and Hindi language data are
+  // served from this app (open-source files, no secrets), so the browser never
+  // calls a third-party service. Served before auth because the OCR web worker
+  // fetches them outside the page's credentials.
+  for (const [route, dir] of OCR_ASSETS) app.use(route, express.static(dir, { immutable: true, maxAge: '30d', fallthrough: false }));
+  app.get('/vendor/tessdata/:lang.traineddata.gz', (req, res) => {
+    const file = TESSDATA[req.params.lang];
+    if (!file || !fs.existsSync(file)) return res.status(404).json({ error: 'language data not installed' });
+    res.sendFile(file, { maxAge: '30d', immutable: true, headers: { 'content-type': 'application/gzip' } });
+  });
   app.use(basicAuth);
   app.use(express.json({ limit: '1mb' }));
   app.use(express.static(path.join(ROOT, 'public')));
@@ -116,8 +136,11 @@ export function createApp({ graph = new GraphClient() } = {}) {
         has_user_token: Boolean(fb.userToken),
         page_token_count: Object.keys(fb.pageTokens).length,
         ppca_enabled: fb.usePublicContentAccess,
+        // Monitoring needs credentials. Without them the app is manual-import only.
+        configured: Boolean(fb.userToken || Object.keys(fb.pageTokens).length || (fb.usePublicContentAccess && fb.appId && fb.appSecret)),
       },
       extraction: { provider: config.extraction.provider, model: config.extraction.provider === 'anthropic' ? config.extraction.model : null },
+      ocr: { engine: 'tesseract.js', languages: ['hin', 'eng'], local: true },
       logo: s.logo_path ? { url: `/api/logo?v=${encodeURIComponent(s.logo_path)}`, width: Number(s.logo_width), height: Number(s.logo_height) } : null,
       active_template: s.active_template,
       templates: listTemplates(),
@@ -213,6 +236,32 @@ export function createApp({ graph = new GraphClient() } = {}) {
   });
 
   app.get('/api/posts/:id', (req, res) => res.json(postDetail(req.params.id)));
+
+  // Text read from the source poster by browser OCR. Stored as the post's
+  // transcription so the fact check can compare the edited poster text with it.
+  app.post('/api/posts/:id/ocr', (req, res) => {
+    const post = getPost(req.params.id);
+    if (!post) throw new HttpError(404, 'Post not found');
+    const b = req.body || {};
+    const fullText = String(b.full_text ?? '').slice(0, 20000);
+    if (!fullText.trim()) throw new HttpError(400, 'OCR returned no text.');
+    const list = (v) => (Array.isArray(v) ? v.map((x) => String(x).slice(0, 300)).slice(0, 50) : []);
+    const confidence = Number(b.confidence);
+    const extraction = {
+      source: 'ocr',
+      engine: 'tesseract.js (hin)',
+      full_text: fullText,
+      confidence: Number.isFinite(confidence) ? Math.round(confidence) : null,
+      source_branding: list(b.branding),
+      people: [], places: [], uncertain: [],
+      is_news_poster: true,
+      extracted_at: now(),
+    };
+    // The fact check against this text is recomputed on the next render ("Save & re-render").
+    updatePost(post.id, { extraction });
+    log.info('ocr', `browser OCR stored (${fullText.length} chars, confidence ${extraction.confidence ?? '?'})`, { postId: post.id });
+    res.json(postDetail(post.id));
+  });
 
   app.put('/api/posts/:id/fields', (req, res) => {
     const post = getPost(req.params.id);

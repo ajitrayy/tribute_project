@@ -1,63 +1,52 @@
-# Configuring API keys and credentials securely
+# Configuration and secrets
 
-Every secret is read from **environment variables on the server**. None of them is
-ever sent to the browser, written to the database, or printed in logs (tokens in
-error messages are replaced with `[redacted]`). The dashboard shows only whether
-each one is set (*Facebook Pages* tab).
+## The free workflow needs no API keys
 
-## What each key is for
+Uploading a poster, reading its Hindi text, editing it and downloading the IBN7
+Bharat PNG uses only:
 
-| Variable | Needed for | Where to get it |
-|---|---|---|
-| `ADMIN_PASSWORD` (+ `ADMIN_USER`) | Signing in to the dashboard. **Required in production.** | Choose a long random password (`openssl rand -base64 24`). |
-| `ANTHROPIC_API_KEY` | Automatic Hindi text extraction from posters. Without it, editors type the text. | console.anthropic.com → API keys. Create a key used only by this app. |
-| `FB_APP_ID`, `FB_APP_SECRET` | Facebook Graph API. The secret signs every call (`appsecret_proof`). | developers.facebook.com → your app → Settings → Basic. |
-| `FB_USER_ACCESS_TOKEN` | Reading Pages your business manages (or that granted you access). | Business Settings → System users → Generate token (see docs/FACEBOOK_ACCESS.md). |
-| `FB_PAGE_ACCESS_TOKENS` | Optional: explicit Page tokens, as JSON `{"<page id or username>":"<token>"}`. | Graph API Explorer or `/me/accounts`. |
-| `FB_PPCA_APPROVED` | Set to `true` only if Meta approved Page Public Content Access for your app. | App Review. |
+* **Tesseract.js** (Apache-2.0) with its **Hindi and English language data** (MIT),
+  installed by `npm install` and served by the app itself. OCR runs in the editor's
+  browser. Nothing is sent to an outside service, and there is nothing to pay for.
+* Headless Chromium (Playwright) on the server for rendering the PNG.
 
-## Setting them
+The only setting you need is a dashboard password once the app is reachable by
+anyone else:
 
-**Docker Compose** (recommended). Put them in `.env` next to `docker-compose.yml`:
-
-```bash
-cp .env.example .env
-chmod 600 .env                 # readable only by the owner
-$EDITOR .env
-docker compose up -d           # both services read .env via env_file
+```env
+ADMIN_USER=admin
+ADMIN_PASSWORD=<long random password>     # required when NODE_ENV=production
 ```
 
-**systemd**: put them in an `EnvironmentFile=` owned by root with mode `600`
-(see docs/DEPLOYMENT.md).
+Generate one with `openssl rand -base64 24`.
 
-**Cloud platforms** (Render, Railway, Fly.io, ECS, Cloud Run…): add them in the
-platform's *secrets / environment variables* screen, not in the repository. Most also
-offer a secret manager (AWS Secrets Manager, GCP Secret Manager); inject secrets from
-it as environment variables.
+## Optional settings
 
-## Rules
+| Variable | Needed for | Notes |
+|---|---|---|
+| `FB_APP_ID`, `FB_APP_SECRET`, `FB_USER_ACCESS_TOKEN`, `FB_PAGE_ACCESS_TOKENS`, `FB_PPCA_APPROVED` | **Automatic Facebook monitoring only.** Manual import never uses them. | Without them the dashboard shows *"Facebook monitoring: not configured – manual import only"*. See docs/FACEBOOK_ACCESS.md for how to obtain them and what they can read. |
+| `EXTRACTION_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` | Optional **paid** vision-model extraction. **Not part of the free workflow.** | Off unless `EXTRACTION_PROVIDER=anthropic` is set explicitly. A key on its own does nothing. Leave both unset for the free workflow. |
+| `PORT`, `DATA_DIR`, worker settings | Server tuning | See `.env.example`. |
 
-* **Never commit secrets.** `.env` is in `.gitignore`. If a secret ever lands in git
-  history, rotate it. Deleting the commit is not enough.
-* **Never paste secrets into the dashboard, chat, tickets or screenshots.**
-  `npm run fb:check` prints token *metadata* (type, scopes, expiry), never the token.
-* **Use a system-user token** for Facebook, not a personal user token. It does not
-  expire with a person's session, and it can be limited to just the Pages and
-  permissions this app needs (`pages_show_list`, `pages_read_engagement`).
-* **One key per app.** Give this app its own Anthropic key, so you can see its spend and
-  revoke it independently. Set a spend limit on that workspace in the Anthropic Console.
-* **Rotate** after staff changes or any suspected leak: create the new key, update the
-  environment, restart, then delete the old key.
-* **Serve the dashboard over HTTPS only.** Basic auth sends the password with every
+## Keeping any secrets safe
+
+Secrets (dashboard password, Facebook tokens) are read only from **environment
+variables on the server**. They are never sent to the browser, stored in the database or
+printed in logs (tokens in error messages are replaced with `[redacted]`).
+
+* Put them in `.env` next to the app (`cp .env.example .env && chmod 600 .env`), in a
+  systemd `EnvironmentFile=` with mode `600`, or in your hosting platform's secrets
+  screen.
+* **Never commit `.env`** (it is in `.gitignore`), and never paste secrets into the
+  dashboard, chat, tickets or screenshots. If one leaks, rotate it.
+* For Facebook, use a **system-user token** limited to `pages_show_list` and
+  `pages_read_engagement` on the Pages you monitor.
+* Serve the dashboard over **HTTPS only**. Basic auth sends the password with every
   request.
 
-## Checking the configuration
+## Checking the setup
 
 ```bash
-npm run fb:check -- https://www.facebook.com/YourPage   # Facebook token + Page access
-npm run extract:check -- path/to/poster.jpg             # Anthropic key + Hindi extraction
+npm run ocr:check -- path/to/poster.jpg                 # free Hindi OCR from the terminal
+npm run fb:check -- https://www.facebook.com/YourPage   # only if Facebook monitoring is configured
 ```
-
-Both commands run against the real services, so they are the way to confirm a key
-works. They read the same environment as the app. With Docker, run them inside the
-container: `docker compose exec worker npm run fb:check -- …`.

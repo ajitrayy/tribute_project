@@ -27,14 +27,14 @@ Measured from `reference/01-bihar-weather.jpg` (1080×1350):
   * `[b]words[/b]` → blue (#0130a4)
   * a new line in the headline field forces a line break.
 
-  In the editor, select words and press **Red** / **Blue** / **Black**. Automatic
-  extraction suggests colours, and the app checks that the words themselves were not
-  changed.
+  In the editor, select words and press **Red** / **Blue** / **Black**. (The free OCR
+  does not detect colours. The optional paid extraction suggests them, and the app
+  checks that the words themselves were not changed.)
 * *Sub-headline* prints as the white-on-red box used for quote attributions
   (`- शत्रुजीत कपूर, DG (ITBP)`). *Body lines* print as smaller black lines.
 * The photo fills the space down to the footer and fades to white at its top. It comes
-  from (a) the area automatic extraction picks on the source poster, (b) an area the
-  editor drags on the source image, or (c) an uploaded photo.
+  from (a) an area the editor drags on the source image, (b) an uploaded photo, or
+  (c) the area picked by the optional paid extraction.
 * Footer: white band with social icons and handle, 16 px red bar.
 * Long headlines shrink automatically. If one still does not fit, the editor is told to
   shorten it.

@@ -1,3 +1,5 @@
+import { colourAsInk, fieldsFromPasses, toGreyscale } from '/ocr-map.js';
+
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (t) => (t ? new Date(t).toLocaleString() : '–');
@@ -5,6 +7,7 @@ const fmt = (t) => (t ? new Date(t).toLocaleString() : '–');
 let status = null;
 let currentPost = null;
 let cropSel = null; // normalized {x,y,width,height} drawn on the source image
+let formDirty = false; // unsaved edits (typed or from OCR) - never overwritten by refreshes
 
 const activeTemplate = () => status?.templates.find((t) => t.id === status.active_template);
 
@@ -73,7 +76,10 @@ async function loadStatus() {
   $('#mon-toggle').textContent = m.paused ? 'Resume' : 'Pause';
   const v = status.verification || {};
   const chip = $('#mon-verified');
-  if (!v.pages) {
+  if (!status.facebook.configured) {
+    chip.textContent = 'Facebook monitoring: not configured - manual import only';
+    chip.className = 'pill skipped';
+  } else if (!v.pages) {
     chip.textContent = 'No Facebook Pages added';
     chip.className = 'pill skipped';
   } else if (v.verified) {
@@ -88,7 +94,7 @@ async function loadStatus() {
   const warnings = [];
   if (!t || t.placeholder) warnings.push('The official IBN7 Bharat template is not installed yet - posters are rendered as DRAFTS on a placeholder layout and cannot be approved.');
   if (!status.logo) warnings.push('The official logo has not been uploaded (Branding & template).');
-  if (status.extraction.provider !== 'anthropic') warnings.push('Automatic text extraction is off (no ANTHROPIC_API_KEY) - poster text must be typed in manually.');
+
   $('#notice').hidden = !warnings.length;
   $('#notice').textContent = warnings.join(' ');
 }
@@ -154,12 +160,15 @@ function debounce(fn, ms) {
 }
 
 // ---------- poster detail ----------
-async function openPost(id) {
+async function openPost(id, { autoOcr = false } = {}) {
   await guarded(async () => {
+    if (String(currentPost?.id) !== String(id)) formDirty = false;
     currentPost = await api(`/api/posts/${id}`);
+    resetOcrStatus();
     renderDetail();
     if (!$('#detail').open) $('#detail').showModal();
   });
+  if (autoOcr && currentPost?.source_image_path) runOcr({ confirmReplace: false });
 }
 
 function renderDetail() {
@@ -221,7 +230,7 @@ function renderDetail() {
 
   const f = p.fields || {};
   const form = $('#d-form');
-  if (!form.contains(document.activeElement)) {
+  if (!formDirty && !form.contains(document.activeElement)) {
     for (const k of ['category_label', 'headline', 'subheadline', 'location', 'date_text']) form.elements[k].value = f[k] || '';
     form.elements.body_lines.value = (f.body_lines || []).join('\n');
     $('#d-headline-preview').innerHTML = markupHtml(form.elements.headline.value);
@@ -241,6 +250,7 @@ document.querySelectorAll('.swatch').forEach((btn) => btn.addEventListener('clic
   ta.value = value.slice(0, a) + wrapped + value.slice(b);
   ta.focus();
   ta.setSelectionRange(a, a + wrapped.length);
+  formDirty = true;
   $('#d-headline-preview').innerHTML = markupHtml(ta.value);
 }));
 $('#d-form').elements.headline.addEventListener('input', (e) => {
@@ -295,6 +305,7 @@ $('#d-crop').addEventListener('click', () => guarded(async () => {
 }));
 $('#detail').addEventListener('close', () => {
   currentPost = null;
+  formDirty = false;
   loadPosters();
 });
 $('#d-form').addEventListener('submit', (e) => {
@@ -306,6 +317,7 @@ $('#d-form').addEventListener('submit', (e) => {
       body_lines: el.body_lines.value.split('\n'), location: el.location.value, date_text: el.date_text.value,
     };
     currentPost = await api(`/api/posts/${currentPost.id}/fields`, { method: 'PUT', json: { fields } });
+    formDirty = false;
     document.activeElement.blur();
     renderDetail();
   });
@@ -340,7 +352,7 @@ $('#d-photo-remove').addEventListener('click', () => guarded(async () => {
 async function loadPages() {
   const pages = await api('/api/pages');
   const fb = status?.facebook || {};
-  $('#fb-config').innerHTML = `<strong>Facebook credentials on the server:</strong>
+  $('#fb-config').innerHTML = `${fb.configured ? '' : `<p><strong>Automatic Facebook monitoring is unavailable:</strong> no Facebook credentials are configured on the server, so Pages added here are saved but cannot be read. Use <em>Manual import</em> - it needs no Facebook or AI keys. Monitoring stays marked unverified until it is configured and a real new post has been processed (docs/FACEBOOK_ACCESS.md).</p>`}<strong>Facebook credentials on the server:</strong>
     app id/secret ${fb.has_app ? '✔' : '✘'} · user/system-user token ${fb.has_user_token ? '✔' : '✘'} ·
     explicit Page tokens: ${fb.page_token_count ?? 0} · Page Public Content Access: ${fb.ppca_enabled ? 'enabled' : 'not enabled'} · Graph ${esc(fb.graph_version || '')}`;
   $('#pages-table').innerHTML = `<tr><th>Page</th><th>Access</th><th>Monitoring verified</th><th>Last checked</th><th>Posters</th><th>Enabled</th><th></th></tr>${pages.map((p) => `<tr>
@@ -391,9 +403,158 @@ $('#import-form').addEventListener('submit', (e) => {
     const post = await api('/api/import', { method: 'POST', body: new FormData(e.target) });
     e.target.reset();
     document.querySelector('[data-tab=posters]').click();
-    openPost(post.id);
+    openPost(post.id, { autoOcr: true });
   });
 });
+
+// ---------- free in-browser Hindi OCR (Tesseract.js, files served by this app) ----------
+let ocrWorker = null;
+let ocrBusy = false;
+
+function ocrStatus(text, cls = '') {
+  const el = $('#d-ocr-status');
+  el.textContent = text;
+  el.className = cls || 'muted';
+}
+
+function resetOcrStatus() {
+  if (ocrBusy) return;
+  ocrStatus('Free Hindi OCR runs in this browser (Tesseract.js). If an area is selected above, only that area is read.');
+  const t = currentPost?.extraction?.source === 'ocr' ? currentPost.extraction.full_text : '';
+  $('#d-ocr-details').hidden = !t;
+  $('#d-ocr-text').textContent = t;
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.onload = resolve;
+    el.onerror = () => reject(new Error(`could not load ${src}`));
+    document.head.append(el);
+  });
+}
+
+const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what} timed out`)), ms))]);
+
+const OCR_STEPS = {
+  'loading tesseract core': 'Loading OCR engine',
+  'initializing tesseract': 'Starting OCR engine',
+  'loading language traineddata': 'Loading Hindi language data',
+  'initializing api': 'Preparing Hindi OCR',
+  'recognizing text': 'Reading text',
+};
+
+let ocrLangs = '';
+
+async function createOcrWorker(langs) {
+  return withTimeout(window.Tesseract.createWorker(langs, 1, {
+    workerPath: '/vendor/tesseract/worker.min.js',
+    corePath: '/vendor/tesseract-core',
+    langPath: '/vendor/tessdata',
+    gzip: true,
+    logger: (m) => {
+      const label = OCR_STEPS[m.status] || m.status;
+      if (label) ocrStatus(`${label}… ${m.progress ? Math.round(m.progress * 100) + '%' : ''}`);
+    },
+  }), 60000, 'Loading Hindi OCR');
+}
+
+// Tesseract's worker hangs rather than failing when language data cannot be
+// fetched, so check the files first and fail fast with a clear message.
+async function languageAvailable(lang) {
+  try {
+    const r = await withTimeout(fetch(`/vendor/tessdata/${lang}.traineddata.gz`, { method: 'HEAD' }), 15000, 'Checking language data');
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function getOcrWorker() {
+  if (ocrWorker) return ocrWorker;
+  if (!window.Tesseract) await withTimeout(loadScript('/vendor/tesseract/tesseract.min.js'), 30000, 'Loading the OCR library');
+  ocrStatus('Checking Hindi language data…');
+  if (!(await languageAvailable('hin'))) throw new Error('the Hindi language data could not be loaded');
+  // Hindi + English (acronyms like "DG (ITBP)"); Hindi only if English is missing.
+  const eng = await languageAvailable('eng');
+  ocrWorker = await createOcrWorker(eng ? 'hin+eng' : 'hin');
+  ocrLangs = eng ? 'Hindi + English' : 'Hindi';
+  return ocrWorker;
+}
+
+/** Draw the source image (or the selected area of it) onto a canvas for OCR. */
+async function ocrCanvas() {
+  const img = $('#d-source img');
+  if (!img) throw new Error('no source image');
+  if (!img.complete) await new Promise((r, j) => { img.onload = r; img.onerror = () => j(new Error('source image did not load')); });
+  const sel = cropSel && cropSel.width > 0.05 && cropSel.height > 0.05 ? cropSel : { x: 0, y: 0, width: 1, height: 1 };
+  const sw = Math.round(sel.width * img.naturalWidth);
+  const sh = Math.round(sel.height * img.naturalHeight);
+  // Small screenshots read better when enlarged.
+  const scale = sw < 1200 ? 2 : 1;
+  const c = document.createElement('canvas');
+  c.width = sw * scale;
+  c.height = sh * scale;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, sel.x * img.naturalWidth, sel.y * img.naturalHeight, sw, sh, 0, 0, c.width, c.height);
+  const variant = (transform) => {
+    const v = document.createElement('canvas');
+    v.width = c.width;
+    v.height = c.height;
+    v.getContext('2d').putImageData(transform(ctx.getImageData(0, 0, c.width, c.height)), 0, 0);
+    return v;
+  };
+  return [variant(toGreyscale), variant(colourAsInk)];
+}
+
+async function runOcr({ confirmReplace = true } = {}) {
+  if (ocrBusy || !currentPost) return;
+  const postId = currentPost.id;
+  ocrBusy = true;
+  if (!confirmReplace) formDirty = false;
+  $('#d-ocr').disabled = true;
+  try {
+    ocrStatus('Loading OCR engine…');
+    const worker = await getOcrWorker();
+    const [grey, ink] = await ocrCanvas();
+    // Two passes (greyscale, and coloured text as dark ink); keep the more confident one.
+    ocrStatus('Reading text (pass 1 of 2)…');
+    const a = (await withTimeout(worker.recognize(grey, {}, { text: true, blocks: true }), 120000, 'Reading the text')).data;
+    ocrStatus('Reading text (pass 2 of 2)…');
+    const b = (await withTimeout(worker.recognize(ink, {}, { text: true, blocks: true }), 120000, 'Reading the text')).data;
+    if (currentPost?.id !== postId) return;
+    const data = fieldsFromPasses([a, b]);
+    const { fields, branding } = data;
+    if (!fields.headline) throw new Error('no readable Hindi text was found');
+    const form = $('#d-form');
+    const hasText = form.elements.headline.value.trim();
+    // Automatic OCR (right after import) never overwrites text the editor typed meanwhile.
+    const typedMeanwhile = !confirmReplace && formDirty && hasText;
+    if (!typedMeanwhile && (!hasText || !confirmReplace || confirm('Replace the text in the editor with the OCR result?'))) {
+      form.elements.headline.value = fields.headline;
+      form.elements.subheadline.value = fields.subheadline;
+      form.elements.body_lines.value = fields.body_lines.join('\n');
+      $('#d-headline-preview').innerHTML = markupHtml(fields.headline);
+      formDirty = true;
+    }
+    currentPost = await api(`/api/posts/${postId}/ocr`, { json: { full_text: data.text, confidence: data.confidence, branding } });
+    renderDetail(); // form is dirty, so the OCR text in it is kept
+    $('#d-ocr-details').hidden = false;
+    $('#d-ocr-text').textContent = data.text;
+    ocrStatus(`OCR done (${ocrLangs}, confidence ${Math.round(data.confidence)}%). Check every word against the source image, fix mistakes, colour words, then press "Save & re-render".`, 'ok');
+  } catch (e) {
+    ocrStatus(`OCR could not run (${e.message}). Type the poster text in the fields instead - everything else works the same.`, 'err');
+    if (ocrWorker && /timed out/.test(e.message)) ocrWorker = null;
+    $('#d-form').elements.headline.focus();
+  } finally {
+    ocrBusy = false;
+    $('#d-ocr').disabled = false;
+  }
+}
+$('#d-ocr').addEventListener('click', () => runOcr());
+$('#d-form').addEventListener('input', () => { formDirty = true; });
 
 // ---------- branding ----------
 async function loadBranding() {

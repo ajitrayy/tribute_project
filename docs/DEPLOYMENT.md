@@ -14,13 +14,13 @@ generated PNGs and the logo. Back that directory up, and run **one** worker.
 
 * Node.js **22.13+** (uses the built-in `node:sqlite`)
 * Chromium for rendering, installed by Playwright (the Docker image already has it)
-* Outbound HTTPS to `graph.facebook.com`, Facebook's image CDN (`*.fbcdn.net`), and
-  `api.anthropic.com` if automatic extraction is on
+* No outbound access is needed for the free workflow (OCR files are served by the app).
+  Automatic monitoring additionally needs `graph.facebook.com` and `*.fbcdn.net`.
 
 ## Option A – Docker Compose (recommended)
 
 ```bash
-cp .env.example .env        # fill in ADMIN_PASSWORD, FB_*, ANTHROPIC_API_KEY
+cp .env.example .env        # set ADMIN_PASSWORD; FB_* only for automatic monitoring
 docker compose up -d --build
 docker compose exec worker npm run fb:check -- https://www.facebook.com/YourPage
 ```

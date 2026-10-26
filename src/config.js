@@ -55,8 +55,10 @@ export const config = {
   },
 
   extraction: {
-    // "anthropic" (vision model) or "manual" (editor fills in the text).
-    provider: process.env.EXTRACTION_PROVIDER || (process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'manual'),
+    // "manual" (default): the editor reads the text with free in-browser OCR
+    // (Tesseract.js) or types it. "anthropic" is an optional paid vision model,
+    // used only when explicitly selected here - never just because a key exists.
+    provider: process.env.EXTRACTION_PROVIDER || 'manual',
     model: process.env.ANTHROPIC_MODEL || 'claude-opus-5-5',
     effort: process.env.EXTRACTION_EFFORT || 'medium',
   },

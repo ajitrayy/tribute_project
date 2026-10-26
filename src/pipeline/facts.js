@@ -52,17 +52,21 @@ export function factCheck(extraction, fields, { usedFields = null } = {}) {
   const sourceText = String(extraction.full_text || '');
   const out = posterText(fields, usedFields);
 
+  // OCR can misread digits, so mismatches against OCR text are warnings that
+  // point the editor back to the source image rather than hard errors.
+  const ocr = extraction.source === 'ocr';
+  const where = ocr ? 'the OCR text of the source poster (check the image - OCR may have misread it)' : 'the source poster';
   const srcNums = multiset(numbersIn(sourceText));
   const outNums = multiset(numbersIn(out));
   for (const [n, c] of outNums) {
     if ((srcNums.get(n) || 0) < c) {
-      warnings.push({ level: 'error', message: `Number "${n}" is on the new poster but not on the source poster.` });
+      warnings.push({ level: ocr ? 'warn' : 'error', message: `Number "${n}" is on the new poster but not in ${where}.` });
     }
   }
   const brandingNums = new Set(numbersIn([...(extraction.source_branding || [])].join(' ')));
   for (const [n] of srcNums) {
     if (!outNums.has(n) && !brandingNums.has(n)) {
-      warnings.push({ level: 'warn', message: `Number "${n}" from the source poster is not on the new poster.` });
+      warnings.push({ level: 'warn', message: `Number "${n}" from ${ocr ? 'the OCR text' : 'the source poster'} is not on the new poster.` });
     }
   }
 

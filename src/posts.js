@@ -3,7 +3,7 @@ import { getDb, now } from './db.js';
 export const STATUSES = {
   queued: 'Waiting to be processed',
   processing: 'Downloading / extracting / rendering',
-  needs_input: 'Text extraction unavailable - enter the poster text manually',
+  needs_input: 'Waiting for the poster text (run OCR in the editor or type it)',
   ready: 'Generated - awaiting review',
   approved: 'Approved',
   duplicate: 'Duplicate of an earlier poster',

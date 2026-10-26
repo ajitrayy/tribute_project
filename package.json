@@ -14,16 +14,20 @@
     "fb:check": "node --disable-warning=ExperimentalWarning src/cli/fb-check.js",
     "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.js\"",
     "render:sample": "node --disable-warning=ExperimentalWarning scripts/render-sample.js",
-    "extract:check": "node --disable-warning=ExperimentalWarning scripts/extract-check.js"
+    "extract:check": "node --disable-warning=ExperimentalWarning scripts/extract-check.js",
+    "ocr:check": "node --disable-warning=ExperimentalWarning scripts/ocr-check.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
     "@fontsource/noto-sans-devanagari": "^5.3.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/hin": "1.0.0",
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
     "multer": "^2.5.0",
     "mustache": "^4.2.0",
     "playwright": "1.63.0",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "tesseract.js": "7.0.0"
   }
 }

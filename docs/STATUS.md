@@ -1,44 +1,46 @@
 # What works, and what has not been tested yet
 
-Last updated with the IBN7 Bharat template work. "Verified" below means it was run
-for real (automated tests and/or a browser session against the running app), not
-just written.
+The app runs as a **free workflow**: no paid AI API and no Facebook credentials are
+needed to turn an uploaded poster into an IBN7 Bharat PNG. "Verified" below means it
+was run for real (automated tests and/or a browser session against the running app),
+not just written.
 
-## Verified working
+## Verified working (free workflow, no API keys)
 
 | Feature | How it was verified |
 |---|---|
-| Manual import → editor → PNG download | Browser end-to-end run against the running app: upload logo → import poster → type headline → colour words with the Red/Blue buttons → drag-crop photo from the source → render → approve → download. The PNG was 1080×1350. |
-| IBN7 Bharat template (`templates/ibn7bharat`) | Rendered with the text of the supplied Bihar poster and compared side by side with the original. Logo position, red rules, headline colours, line layout, photo fade, footer and red bar match. |
-| Hindi text rendering | Conjuncts and matras render correctly in Chromium with embedded fonts. Renders fail loudly if a font does not load. |
-| Logo never distorted | Test renders a 4:1 logo and measures it: drawn at 224×56 (fixed height, natural width), centred. |
-| Headline colour markup `[r]…[/r]` `[b]…[/b]` | Unit tests (escaping, bad/nested tags) and a pixel check for red and blue text on the poster. |
-| Photo from the source poster | Manual drag-crop verified in the browser. Cropping code covered by tests. |
-| Fact check | Unit tests: changed or extra numbers, dropped names/places, source branding, fields the template does not print. |
-| Duplicate detection, job retries/backoff, stale-job recovery | Unit tests. |
-| Monitoring controls (interval, pause/resume, check now) | API tests and browser run. |
-| Page access errors are explained | Adding a Page with no credentials shows "no access" with the reason (browser run). |
+| **Upload poster → Hindi OCR in the browser → edit → 1080×1350 PNG** | `test/browser-ocr.test.js` drives the real dashboard in headless Chromium: upload the reference poster, the editor runs Tesseract.js OCR, fills the headline, saves, and the downloaded PNG is 1080×1350. Also run by hand against the running app with both reference posters and a full phone screenshot. |
+| **OCR runs locally, with no outside services** | The OCR engine and the Hindi + English language data are served by the app itself (`/vendor/...`). The browser test asserts no request leaves the app's own server. |
+| **Fallback to manual typing** | Browser test blocks the Hindi language data: the editor says *"OCR could not run … Type the poster text in the fields instead"* within seconds, the text is typed, and the PNG renders. API test: typing with no OCR at all also renders. |
+| OCR accuracy on the supplied posters | Bihar poster: 3 headline lines, ~77–83 % confidence, typically 1–2 wrong words (e.g. मेहनत → प्रेहनत, येलो misread). ITBP poster: 3 headline lines plus the red-box line `- शत्रुजीत कपूर, DG (ITBP)` read correctly. Full Facebook phone screenshot: app text gets mixed in. Selecting just the poster's text area gives the 3 headline lines at ~94 %. |
+| Paid AI is off | With `ANTHROPIC_API_KEY` set but `EXTRACTION_PROVIDER` unset, the app stays in the free mode (`test/manual-workflow.test.js`). |
+| Manual import needs no Facebook credentials | API test runs the whole import → PNG flow with no Facebook settings and a network-blocking Graph client. |
+| IBN7 Bharat template, logo upload, headline colours, photo drag-crop, preview, approve, download | Browser regression run: logo upload → import → colour words → drag-crop photo → render → approve → download 1080×1350 PNG. Plus template pixel tests (logo 224×56 for a 4:1 logo, red/blue headline text). |
+| Fact check against OCR text | Numbers that differ from the OCR text are flagged as warnings that point back to the source image (OCR can misread digits). |
+| Duplicate detection, job retries, stale-job recovery | Unit tests. |
 
-## Implemented but NOT yet tested for real
+`npm test` runs 40+ tests, including the real OCR engine on the reference poster and the
+browser tests.
 
-| Feature | Why not | How to test it |
-|---|---|---|
-| **Automatic Facebook monitoring** | No Facebook credentials have been supplied, the source Page ("Live Cities") URL is not known, and this build environment cannot reach facebook.com. Only tested against a simulated Graph API. | Set the FB_* variables, then `npm run fb:check -- <page url>`. Add the Page in the dashboard and wait for a new post. The dashboard shows **"Facebook monitoring UNVERIFIED"** until a real post detected on a Page has been processed into a poster. It then marks that Page verified, with a link to the post. |
-| **Automatic text extraction (Claude vision)** | No `ANTHROPIC_API_KEY` in the build environment. | Set the key, then `npm run extract:check -- poster.jpg`. Then import a poster in the dashboard and check that the text and colours are filled in. |
-| **Automatic photo crop** (model-chosen photo area) | Depends on automatic extraction. | Same as above. Check the "Photo" box in the editor. |
-| Docker image build | Docker builds were not run here. | `docker compose up -d --build`. |
+## Not available / not verified
 
-## Known gaps
+| Feature | State |
+|---|---|
+| **Automatic Facebook monitoring** | **Unavailable until configured and tested.** No Facebook credentials or Live Cities Page URL have been supplied, and the build environment could not reach facebook.com. The dashboard header says *"Facebook monitoring: not configured – manual import only"*. After credentials are added it says *UNVERIFIED* until a real new post detected on a Page has been processed into a poster. Code was tested only against a simulated Graph API. |
+| Optional paid extraction (Claude vision) | Present in the code but **off**. It runs only if `EXTRACTION_PROVIDER=anthropic` is set explicitly. Never run with a real key. Not part of the free workflow. |
+| Docker image build | Not run here. |
 
-* **Headline font**: the brand's own font file was not supplied. The template uses Noto
-  Sans Devanagari ExtraCondensed Black (open source), compressed and stroked to match
-  the size, weight and line widths of the reference posters. Letter shapes differ
-  slightly. Send the font file and it will be swapped in (docs/TEMPLATE.md).
-* **Logo**: the dashboard needs the official logo file. Until one is uploaded, posters
-  are drafts and cannot be approved. The browser test used a crop of the reference
-  poster as a stand-in. It was not committed.
-* **Footer icons** (`assets/footer-social.png`) are cut 1:1 from the reference poster.
-  A vector export would be sharper.
-* **Live Cities** is another outlet's Page. Reading it through the Graph API needs
-  either their permission (they add your business as a partner on their Page) or Meta's
-  Page Public Content Access. See docs/FACEBOOK_ACCESS.md. Until then, use Manual import.
+## Known limits of the free OCR
+
+* OCR is a first draft. **Every result must be checked against the source image**
+  before saving. The status line says so after each run.
+* Small or blurry screenshots read worse. Crop to the poster first, or drag-select the
+  text area in the editor and press **Read text (OCR)**. The small white-on-red quote
+  box in a low-resolution phone screenshot was not read and had to be typed.
+* Headline colours are not detected by OCR. Use the **Red / Blue / Black** buttons.
+* The photo is not detected automatically. Drag-select it on the source image, or
+  upload one.
+* First use downloads about 4.5 MB of language data from your own server into the
+  browser. Later runs are cached.
+* Headline font: the brand font file was not supplied. The template uses an
+  open-source stand-in matched to the reference (docs/TEMPLATE.md).

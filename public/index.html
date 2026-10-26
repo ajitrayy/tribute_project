@@ -66,7 +66,7 @@
 
   <section id="tab-import" class="tab" hidden>
     <form id="import-form" class="card stack">
-      <p>Use this for Pages the Graph API cannot read: download or screenshot the poster through normal Facebook use and upload it here with its link.</p>
+      <p>Upload a poster image saved or screenshotted from Facebook. No Facebook or AI keys are needed: the editor opens and reads the Hindi text with free in-browser OCR, which you then check and correct (or type the text yourself).</p>
       <label>Poster image <input name="image" type="file" accept="image/*" required></label>
       <label>Source post link <input name="source_url" type="url" placeholder="https://www.facebook.com/…/posts/…"></label>
       <label>Caption (optional) <textarea name="caption" rows="3"></textarea></label>
@@ -118,6 +118,13 @@
       <h3>Source <span class="muted">– drag on the image to select a photo area</span></h3>
       <div id="d-source" class="preview small crop-host"></div>
       <div class="row wrap"><button id="d-crop" class="secondary" disabled>Use selected area as photo</button><span id="d-crop-info" class="muted"></span></div>
+      <div class="ocr-box">
+        <div class="row wrap">
+          <button id="d-ocr" type="button">Read text (OCR)</button>
+          <span id="d-ocr-status" class="muted">Free Hindi OCR runs in this browser (Tesseract.js). If an area is selected above, only that area is read.</span>
+        </div>
+        <details id="d-ocr-details" hidden><summary>OCR text</summary><pre id="d-ocr-text"></pre></details>
+      </div>
       <p id="d-source-meta" class="muted"></p>
       <details><summary>Caption &amp; transcription</summary><pre id="d-caption"></pre><pre id="d-fulltext"></pre></details>
       <details><summary>Versions &amp; jobs</summary><div id="d-versions"></div></details>
